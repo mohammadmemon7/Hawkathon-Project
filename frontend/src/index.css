@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0A6E6E;
+  --primary-light: #E8F5F5;
+  --accent: #F47C2B;
+  --emergency: #DC2626;
+  --warning: #D97706;
+  --safe: #16A34A;
+  --text: #1C2B2B;
+  --muted: #6B7280;
+}
+
+body {
+  font-family: 'Noto Sans Devanagari', sans-serif;
+  color: var(--text);
+}
+
+h1, h2, h3 {
+  font-family: 'Sora', sans-serif;
+}
