@@ -16,8 +16,14 @@ exports.search = async (req, res, next) => {
 
 exports.getAll = async (req, res, next) => {
   try {
-    const medicines = db.prepare('SELECT * FROM medicines').all();
-    res.json(medicines);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const total = db.prepare('SELECT COUNT(*) AS count FROM medicines').get().count;
+    const medicines = db.prepare('SELECT * FROM medicines LIMIT ? OFFSET ?').all(limit, offset);
+
+    res.json({ data: medicines, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
   }

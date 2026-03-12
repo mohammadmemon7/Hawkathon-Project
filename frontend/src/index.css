@@ -20,6 +20,32 @@ body {
   color: var(--text);
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: 'Sora', sans-serif;
+}
+
+/* Low-bandwidth mode: hide images & disable animations */
+body.low-bandwidth img {
+  display: none;
+}
+
+body.low-bandwidth video,
+body.low-bandwidth iframe {
+  display: none;
+}
+
+body.low-bandwidth *,
+body.low-bandwidth *::before,
+body.low-bandwidth *::after {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
+}
+
+body.low-bandwidth .backdrop-blur-md,
+body.low-bandwidth .backdrop-blur-sm,
+body.low-bandwidth .backdrop-blur {
+  backdrop-filter: none !important;
+  background-color: white !important;
 }

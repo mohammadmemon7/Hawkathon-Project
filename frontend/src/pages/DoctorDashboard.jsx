@@ -16,8 +16,8 @@ export default function DoctorDashboard() {
   const fetchData = useCallback(async (showSpinner) => {
     if (showSpinner) setRefreshing(true);
     try {
-      const data = await getPendingConsultations();
-      setConsultations(data);
+      const res = await getPendingConsultations(1, 100);
+      setConsultations(Array.isArray(res) ? res : (res.data || []));
     } catch {
       // silent
     } finally {

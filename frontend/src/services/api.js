@@ -2,11 +2,26 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+  timeout: 10000,
 });
+
+async function withRetry(requestFn) {
+  try {
+    return await requestFn();
+  } catch (err) {
+    // Retry once on network errors or 5xx responses
+    const isNetworkError = !err.response;
+    const isServerError = err.response?.status >= 500;
+    if (isNetworkError || isServerError) {
+      return await requestFn();
+    }
+    throw err;
+  }
+}
 
 export async function registerPatient(data) {
   try {
-    const res = await api.post('/patients/register', data);
+    const res = await withRetry(() => api.post('/patients/register', data));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -15,7 +30,7 @@ export async function registerPatient(data) {
 
 export async function getPatientByPhone(phone) {
   try {
-    const res = await api.get(`/patients/${phone}`);
+    const res = await withRetry(() => api.get(`/patients/${phone}`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -24,16 +39,16 @@ export async function getPatientByPhone(phone) {
 
 export async function getPatientHistory(id) {
   try {
-    const res = await api.get(`/patients/${id}/history`);
+    const res = await withRetry(() => api.get(`/patients/${id}/history`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
   }
 }
 
-export async function getDoctors() {
+export async function getDoctors(page = 1, limit = 10) {
   try {
-    const res = await api.get('/doctors');
+    const res = await withRetry(() => api.get('/doctors', { params: { page, limit } }));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -42,7 +57,7 @@ export async function getDoctors() {
 
 export async function getAvailableDoctors() {
   try {
-    const res = await api.get('/doctors/available');
+    const res = await withRetry(() => api.get('/doctors/available'));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -51,16 +66,16 @@ export async function getAvailableDoctors() {
 
 export async function createConsultation(data) {
   try {
-    const res = await api.post('/consultations/new', data);
+    const res = await withRetry(() => api.post('/consultations/new', data));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
   }
 }
 
-export async function getPendingConsultations() {
+export async function getPendingConsultations(page = 1, limit = 10) {
   try {
-    const res = await api.get('/consultations/pending');
+    const res = await withRetry(() => api.get('/consultations/pending', { params: { page, limit } }));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -69,7 +84,7 @@ export async function getPendingConsultations() {
 
 export async function getConsultation(id) {
   try {
-    const res = await api.get(`/consultations/${id}`);
+    const res = await withRetry(() => api.get(`/consultations/${id}`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -78,7 +93,7 @@ export async function getConsultation(id) {
 
 export async function updateConsultation(id, data) {
   try {
-    const res = await api.patch(`/consultations/${id}`, data);
+    const res = await withRetry(() => api.patch(`/consultations/${id}`, data));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -87,7 +102,7 @@ export async function updateConsultation(id, data) {
 
 export async function completeConsultation(id, doctorId) {
   try {
-    const res = await api.patch(`/consultations/${id}/complete`, { doctor_id: doctorId });
+    const res = await withRetry(() => api.patch(`/consultations/${id}/complete`, { doctor_id: doctorId }));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -96,7 +111,63 @@ export async function completeConsultation(id, doctorId) {
 
 export async function searchMedicines(name) {
   try {
-    const res = await api.get('/medicines/search', { params: { name } });
+    const res = await withRetry(() => api.get('/medicines/search', { params: { name } }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function createAppointment(data) {
+  try {
+    const res = await withRetry(() => api.post('/appointments', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getPatientAppointments(id) {
+  try {
+    const res = await withRetry(() => api.get(`/appointments/patient/${id}`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getDoctorAppointments(id) {
+  try {
+    const res = await withRetry(() => api.get(`/appointments/doctor/${id}`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function cancelAppointment(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/appointments/${id}/cancel`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getNotifications(userId, userType) {
+  try {
+    const res = await withRetry(() => api.get(`/notifications/${userId}`, {
+      params: userType ? { userType } : undefined,
+    }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function markNotificationRead(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/notifications/${id}/read`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;

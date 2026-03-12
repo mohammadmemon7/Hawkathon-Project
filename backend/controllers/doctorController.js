@@ -2,8 +2,14 @@ const db = require('../db/database');
 
 exports.getAll = async (req, res, next) => {
   try {
-    const doctors = db.prepare('SELECT * FROM doctors').all();
-    res.json(doctors);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const total = db.prepare('SELECT COUNT(*) AS count FROM doctors').get().count;
+    const doctors = db.prepare('SELECT * FROM doctors LIMIT ? OFFSET ?').all(limit, offset);
+
+    res.json({ data: doctors, page, limit, total, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
   }
