@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { getPatientHistory } from '../services/api';
+import { getPatientRecords } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { 
   FileText, 
@@ -11,43 +11,42 @@ import {
   Activity, 
   AlertCircle,
   Stethoscope,
-  Filter,
-  ChevronRight,
   RefreshCw,
-  Clock
+  Clock,
+  Clipboard,
+  ShieldCheck,
+  FlaskConical,
+  WifiOff,
+  Copy,
+  ChevronRight
 } from 'lucide-react';
 
-const RECORDS_CACHE_KEY = 'sehatsetu_records_cache';
+const RECORDS_CACHE_PREFIX = 'records:';
 
 export default function MyRecords() {
-  const { currentPatient, language } = useContext(AppContext);
+  const { currentPatient, language, lowBw } = useContext(AppContext);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(null);
 
   const t = {
-    title: language === 'hi' ? 'मेरे चिकित्सा रिकॉर्ड' : 'My Medical Records',
-    profileSummary: language === 'hi' ? 'प्रोफ़ाइल सारांश' : 'Profile Summary',
-    historyTitle: language === 'hi' ? 'परामर्श इतिहास' : 'Consultation History',
-    noRecords: language === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No records found',
+    title: language === 'hi' ? 'चिकित्सा रिकॉर्ड' : 'Health Records',
+    profileSummary: language === 'hi' ? 'रोगी सारांश' : 'Patient Summary',
+    timeline: language === 'hi' ? 'समयरेखा' : 'Medical Timeline',
+    noRecords: language === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No clinical records found',
     age: language === 'hi' ? 'उम्र' : 'Age',
-    gender: language === 'hi' ? 'लिंग' : 'Gender',
     village: language === 'hi' ? 'गांव' : 'Village',
-    medicalHistory: language === 'hi' ? 'पुरानी बीमारियां' : 'Medical History',
-    doctorNotes: language === 'hi' ? 'डॉक्टर के नोट्स' : 'Doctor Notes',
+    phone: language === 'hi' ? 'फोन' : 'Phone',
+    diagnosis: language === 'hi' ? 'रोग की पहचान' : 'Diagnosis',
+    notes: language === 'hi' ? 'डॉक्टर के नोट्स' : 'Clinical Notes',
     prescription: language === 'hi' ? 'दवा का पर्चा' : 'Prescription',
-    status: language === 'hi' ? 'स्थिति' : 'Status',
-    date: language === 'hi' ? 'तारीख' : 'Date',
-    symptoms: language === 'hi' ? 'लक्षण' : 'Symptoms',
-    offlineMode: language === 'hi' ? 'आप ऑफलाइन रिकॉर्ड देख रहे हैं' : 'Viewing offline records',
-    filters: {
-      All: language === 'hi' ? 'सभी' : 'All',
-      Emergency: language === 'hi' ? 'आपातकालीन' : 'Emergency',
-      'Consult Soon': language === 'hi' ? 'जल्द परामर्श' : 'Consult Soon',
-      'Home Remedy': language === 'hi' ? 'घरेलू उपचार' : 'Home Remedy'
-    }
+    followUp: language === 'hi' ? 'अगला परामर्श' : 'Follow up',
+    labReports: language === 'hi' ? 'लैब रिपोर्ट' : 'Lab Reports',
+    copyBtn: language === 'hi' ? 'सारांश कॉपी करें' : 'Copy Summary',
+    offlineBanner: language === 'hi' ? 'ऑफलाइन - कैश्ड रिकॉर्ड' : 'Offline - showing cached records',
+    lastVisited: language === 'hi' ? 'पिछला परामर्श' : 'Last Visited',
   };
 
   const loadData = async (silent = false) => {
@@ -55,17 +54,21 @@ export default function MyRecords() {
     if (!silent) setLoading(true);
     else setIsRefreshing(true);
 
+    const cacheKey = `${RECORDS_CACHE_PREFIX}${currentPatient.id}`;
+    
     try {
-      const data = await getPatientHistory(currentPatient.id);
+      const data = await getPatientRecords(currentPatient.id);
       setRecords(data);
-      window.localStorage.setItem(`${RECORDS_CACHE_KEY}_${currentPatient.id}`, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+      }));
       setError(null);
     } catch (err) {
       console.error('Failed to fetch records:', err);
-      // Attempt to load from cache
-      const cached = window.localStorage.getItem(`${RECORDS_CACHE_KEY}_${currentPatient.id}`);
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
-        setRecords(JSON.parse(cached));
+        setRecords(JSON.parse(cached).data);
         setError('offline');
       } else {
         setError('failed');
@@ -80,199 +83,173 @@ export default function MyRecords() {
     loadData();
   }, [currentPatient?.id]);
 
-  const filteredRecords = useMemo(() => {
-    if (filter === 'All') return records;
-    
-    const filterMap = {
-      'Emergency': 3,
-      'Consult Soon': 2,
-      'Home Remedy': 1
-    };
-    
-    return records.filter(r => r.priority_score === filterMap[filter]);
-  }, [records, filter]);
+  const handleCopySummary = (record) => {
+    const medicines = record.prescription?.medicines?.join(', ') || 'None';
+    const text = `
+SEHATSETU MEDICAL SUMMARY
+Date: ${new Date(record.created_at).toLocaleDateString()}
+Doctor: ${record.doctor_name} (${record.doctor_specialization})
 
-  const getTriageBadge = (score) => {
-    switch (score) {
-      case 3:
-        return <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200 uppercase tracking-wider">{t.filters.Emergency}</span>;
-      case 2:
-        return <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded-full border border-orange-200 uppercase tracking-wider">{t.filters['Consult Soon']}</span>;
-      case 1:
-        return <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200 uppercase tracking-wider">{t.filters['Home Remedy']}</span>;
-      default:
-        return <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full border border-gray-200 uppercase tracking-wider">Normal</span>;
-    }
+Diagnosis: ${record.diagnosis}
+Notes: ${record.consultation_notes}
+
+Prescription:
+Medicines: ${medicines}
+Instructions: ${record.prescription?.instructions || 'N/A'}
+Follow up: ${record.prescription?.follow_up || 'N/A'}
+    `.trim();
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopySuccess(record.id);
+      setTimeout(() => setCopySuccess(null), 2000);
+    });
   };
 
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 pb-24">
+    <div className={`p-4 md:p-8 space-y-8 pb-24 ${lowBw ? 'no-animations' : ''}`}>
       {/* Offline Alert */}
       {error === 'offline' && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-800">
-          <AlertCircle size={20} className="text-amber-600" />
-          <p className="text-sm font-bold">{t.offlineMode}</p>
+          <WifiOff size={20} className="text-amber-600" />
+          <p className="text-sm font-bold">{t.offlineBanner}</p>
         </div>
       )}
 
-      {/* Patient Profile Summary Card */}
-      <div className="bg-white rounded-3xl shadow-sm border border-emerald-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 p-6 text-white">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-black border border-white/30">
-              {currentPatient?.name?.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">{currentPatient?.name}</h2>
-              <div className="flex items-center gap-2 text-teal-50 text-sm font-medium opacity-90 mt-1">
-                <p>PID: {currentPatient?.id}</p>
-                <span>•</span>
-                <div className="flex items-center gap-1">
-                  <Phone size={14} />
-                  {currentPatient?.phone}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Patient Profile Header */}
+      <div className="bg-white rounded-[40px] p-6 md:p-10 border border-gray-100 shadow-sm relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full -mr-32 -mt-32 opacity-50 group-hover:scale-110 transition-transform duration-700"></div>
         
-        <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-gray-400">
-              <User size={16} />
-              <span className="text-xs font-bold uppercase tracking-widest">{t.age} & {t.gender}</span>
+        <div className="relative flex flex-col md:flex-row gap-8 items-start md:items-center">
+            <div className="w-20 h-20 bg-emerald-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-emerald-200">
+                <User size={40} />
             </div>
-            <p className="text-gray-800 font-bold">{currentPatient?.age} yr, {currentPatient?.gender}</p>
-          </div>
-          
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-gray-400">
-              <MapPin size={16} />
-              <span className="text-xs font-bold uppercase tracking-widest">{t.village}</span>
+            <div className="flex-1 space-y-2">
+                <h2 className="text-3xl font-black text-gray-800 tracking-tight">{currentPatient?.name}</h2>
+                <div className="flex flex-wrap gap-4 text-gray-400 text-sm font-bold">
+                    <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                        <Activity size={16} className="text-emerald-500" />
+                        <span>{currentPatient?.age} {t.age}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                        <MapPin size={16} className="text-emerald-500" />
+                        <span>{currentPatient?.village}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                        <Phone size={16} className="text-emerald-500" />
+                        <span>{currentPatient?.phone}</span>
+                    </div>
+                </div>
             </div>
-            <p className="text-gray-800 font-bold">{currentPatient?.village}</p>
-          </div>
-
-          <div className="md:col-span-2 space-y-1">
-            <div className="flex items-center gap-2 text-gray-400">
-              <Activity size={16} />
-              <span className="text-xs font-bold uppercase tracking-widest">{t.medicalHistory}</span>
-            </div>
-            <p className="text-gray-800 font-medium italic">
-              {currentPatient?.medical_history || (language === 'hi' ? 'कोई पिछला रिकॉर्ड नहीं' : 'No previous history recorded')}
-            </p>
-          </div>
+            <button 
+                onClick={() => loadData(true)}
+                disabled={isRefreshing}
+                className="p-4 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-white hover:shadow-md transition-all group"
+            >
+                <RefreshCw size={24} className={`text-emerald-600 ${isRefreshing ? 'animate-spin' : 'group-active:rotate-180 transition-transform'}`} />
+            </button>
         </div>
       </div>
 
-      {/* History Section */}
+      {/* Timeline Section */}
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl">
-              <FileText size={24} />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800">{t.historyTitle}</h2>
-          </div>
-
-          {/* Filters */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-            {Object.keys(t.filters).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${
-                  filter === f 
-                  ? 'bg-teal-600 text-white border-teal-600 shadow-lg shadow-teal-600/20' 
-                  : 'bg-white text-gray-500 border-gray-100 hover:border-teal-200'
-                }`}
-              >
-                {t.filters[f]}
-              </button>
-            ))}
-            <button 
-              onClick={() => loadData(true)}
-              disabled={isRefreshing}
-              className={`p-2 rounded-xl border border-gray-100 text-gray-400 hover:text-teal-600 transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
-            >
-              <RefreshCw size={18} />
-            </button>
-          </div>
+        <div className="flex items-center gap-3 ml-2">
+            <div className="w-1.5 h-8 bg-emerald-600 rounded-full"></div>
+            <h3 className="text-2xl font-black text-gray-800 uppercase tracking-widest text-sm">{t.timeline}</h3>
         </div>
 
-        {/* List of Consultations */}
-        {filteredRecords.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-dashed border-gray-200 p-12 text-center text-gray-400">
-            <FileText size={48} className="mx-auto mb-4 opacity-20" />
-            <p className="font-bold">{t.noRecords}</p>
+        {records.length === 0 ? (
+          <div className="bg-white rounded-[40px] p-20 text-center border-2 border-dashed border-gray-100">
+            <FileText size={64} className="mx-auto mb-6 text-gray-200" />
+            <h3 className="text-xl font-black text-gray-800 mb-2">{t.noRecords}</h3>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {filteredRecords.map((record) => (
-              <div key={record.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
-                <div className="flex flex-col lg:flex-row lg:items-center">
-                  {/* Left Column: Triage & Date */}
-                  <div className="p-6 lg:p-8 border-b lg:border-b-0 lg:border-r border-gray-50 bg-gray-50/30 lg:w-72 flex-shrink-0">
-                    <div className="mb-4">{getTriageBadge(record.priority_score)}</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <Calendar size={14} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{t.date}</span>
-                      </div>
-                      <p className="font-bold text-gray-800">
-                        {new Date(record.created_at).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </p>
-                      <div className="flex items-center gap-2 text-teal-600/60 font-medium text-xs">
-                        <Clock size={12} />
-                        <span>{new Date(record.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
+          <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-100 before:to-transparent">
+            {records.map((record, index) => (
+              <div key={record.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
+                {/* Icon */}
+                <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-emerald-600 text-white shadow-lg shadow-emerald-100 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shrink-0">
+                  <ShieldCheck size={18} />
+                </div>
+                
+                {/* Content Card */}
+                <div className="w-[calc(100%-4rem)] md:w-[45%] bg-white p-6 md:p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                        <div className="flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">
+                            <Calendar size={12} />
+                            {new Date(record.created_at).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                        </div>
+                        <h4 className="font-black text-gray-800">Dr. {record.doctor_name}</h4>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{record.doctor_specialization}</p>
                     </div>
+                    <button 
+                        onClick={() => handleCopySummary(record)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            copySuccess === record.id ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                        }`}
+                    >
+                        {copySuccess === record.id ? <ShieldCheck size={14} /> : <Copy size={14} />}
+                        {copySuccess === record.id ? 'Copied' : t.copyBtn}
+                    </button>
                   </div>
 
-                  {/* Right Column: Details */}
-                  <div className="p-6 lg:p-8 flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-emerald-600/70 font-black text-[10px] uppercase tracking-widest">
-                          <Stethoscope size={12} />
-                          {t.symptoms}
-                        </div>
-                        <p className="text-gray-800 font-bold leading-relaxed">{record.symptoms}</p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-gray-400 font-black text-[10px] uppercase tracking-widest">
-                          <Clock size={12} />
-                          {t.status}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                           <div className={`w-2 h-2 rounded-full ${record.status === 'completed' ? 'bg-green-500' : 'bg-amber-500'}`}></div>
-                           <span className="text-sm font-bold text-gray-700 capitalize">{record.status}</span>
-                        </div>
-                      </div>
+                  <div className="space-y-6">
+                    <div>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">{t.diagnosis}</span>
+                        <p className="text-lg font-black text-gray-800">{record.diagnosis}</p>
                     </div>
 
-                    <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
-                      <div className="space-y-1">
-                        <span className="text-teal-600/70 font-black text-[10px] uppercase tracking-widest block">{t.doctorNotes}</span>
-                        <p className="text-sm text-gray-600 font-medium leading-relaxed italic">
-                          {record.doctor_notes || (language === 'hi' ? 'परामर्श लंबित है' : 'Consultation pending...')}
+                    <div>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">{t.notes}</span>
+                        <p className="text-gray-600 font-medium leading-relaxed bg-gray-50 p-4 rounded-3xl border border-gray-50 italic">
+                            "{record.consultation_notes}"
                         </p>
-                      </div>
-                      
-                      {record.prescription && (
-                        <div className="space-y-1 pt-2 border-t border-gray-100">
-                          <span className="text-teal-600/70 font-black text-[10px] uppercase tracking-widest block">{t.prescription}</span>
-                          <p className="text-sm font-bold text-gray-800">{record.prescription}</p>
-                        </div>
-                      )}
                     </div>
+
+                    {record.prescription && (
+                        <div className="p-6 bg-emerald-50/50 rounded-3xl border border-emerald-50">
+                            <div className="flex items-center gap-2 mb-4">
+                                <FileText size={16} className="text-emerald-600" />
+                                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{t.prescription}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {record.prescription.medicines.map((med, i) => (
+                                    <span key={i} className="px-3 py-1 bg-white border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold">
+                                        {med}
+                                    </span>
+                                ))}
+                            </div>
+                            <p className="text-xs text-emerald-800/80 mb-2"><strong>Instructions:</strong> {record.prescription.instructions}</p>
+                            {record.prescription.follow_up && (
+                                <p className="text-xs text-emerald-800/80"><strong>{t.followUp}:</strong> {record.prescription.follow_up}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {record.lab_reports?.length > 0 && (
+                        <div className="pt-4 border-t border-gray-50">
+                             <div className="flex items-center gap-2 mb-3">
+                                <FlaskConical size={16} className="text-purple-600" />
+                                <span className="text-[10px] font-black text-purple-700 uppercase tracking-widest">{t.labReports}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {record.lab_reports.map((report) => (
+                                    <a 
+                                        key={report.id} 
+                                        href={report.file_url || '#'} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-100 text-purple-700 rounded-xl text-[10px] font-bold hover:bg-purple-100 transition-colors"
+                                    >
+                                        <FlaskConical size={12} />
+                                        {report.file_name}
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                   </div>
                 </div>
               </div>

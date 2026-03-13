@@ -16,6 +16,11 @@ const notificationRoutes = require('./routes/notifications');
 const callRoutes = require('./routes/calls');
 const symptomCheckerRoutes = require('./routes/symptomChecker');
 const doctorDirectoryRoutes = require('./routes/doctorDirectory');
+const telemedRoutes = require('./routes/telemed');
+const recordsRoutes = require('./routes/records');
+const workerRoutes = require('./routes/workers');
+const analyticsRoutes = require('./routes/analytics');
+const smsRoutes = require('./routes/sms');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -44,6 +49,11 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/symptom-checker', symptomCheckerRoutes);
 app.use('/api/doctor-directory', doctorDirectoryRoutes);
+app.use('/api/telemed', telemedRoutes);
+app.use('/api/records', recordsRoutes);
+app.use('/api/workers', workerRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/sms', smsRoutes);
 
 app.use(errorHandler);
 

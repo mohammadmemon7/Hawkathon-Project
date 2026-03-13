@@ -12,10 +12,14 @@ import {
   Activity,
   UserPlus,
   WifiOff,
-  ChevronLeft
+  ChevronLeft,
+  MessageSquare,
+  Phone,
+  Video,
+  X
 } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
-import { getDoctorDirectory } from '../services/api';
+import { getDoctorDirectory, createTelemedSession } from '../services/api';
 
 const SPECIALIZATIONS = [
   'General Physician',
@@ -38,7 +42,11 @@ export default function DoctorDirectory() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
   const [isOffline, setIsOffline] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedForConsult, setSelectedForConsult] = useState(null);
+  const [consultLoading, setConsultLoading] = useState(false);
   
+  const { patient } = useContext(AppContext);
   const [filters, setFilters] = useState({
     search: '',
     specialization: '',
@@ -103,8 +111,31 @@ export default function DoctorDirectory() {
   }, [filters]);
 
   const handleSelect = (doctor) => {
-    setSelectedDoctor(doctor);
-    navigate('/talk');
+    setSelectedForConsult(doctor);
+    setIsModalOpen(true);
+  };
+
+  const handleStartConsultation = async (mode) => {
+    if (!patient) {
+      navigate('/login');
+      return;
+    }
+    
+    setConsultLoading(true);
+    try {
+      const session = await createTelemedSession({
+        patient_id: patient.id,
+        doctor_id: selectedForConsult.id,
+        mode
+      });
+      setSelectedDoctor(selectedForConsult);
+      navigate(`/consult/${session.id}`, { state: { session } });
+    } catch (err) {
+      console.error("Failed to start consultation:", err);
+      alert("Failed to start consultation. Please try again.");
+    } finally {
+      setConsultLoading(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -322,6 +353,81 @@ export default function DoctorDirectory() {
             </div>
         )}
       </div>
+
+      {/* CONSULTATION MODE MODAL */}
+      {isModalOpen && selectedForConsult && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => !consultLoading && setIsModalOpen(false)}></div>
+          <div className="relative w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl animate-in fade-in zoom-in duration-300">
+            <button 
+                onClick={() => setIsModalOpen(false)}
+                className="absolute right-6 top-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:text-gray-600 transition-all"
+                disabled={consultLoading}
+            >
+                <X size={20} />
+            </button>
+
+            <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-purple-50 rounded-3xl flex items-center justify-center mx-auto mb-4 text-purple-600 font-black text-2xl">
+                    {selectedForConsult.name.split(' ').pop()[0]}
+                </div>
+                <h3 className="text-xl font-black text-gray-800">Start Consultation</h3>
+                <p className="text-gray-500 font-bold text-sm">Choose how you want to connect with {selectedForConsult.name}</p>
+            </div>
+
+            <div className="space-y-3">
+                <button 
+                    onClick={() => handleStartConsultation('chat')}
+                    disabled={consultLoading}
+                    className="w-full flex items-center gap-4 p-4 bg-white border-2 border-gray-100 rounded-3xl hover:border-purple-600 hover:bg-purple-50 group transition-all disabled:opacity-50"
+                >
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:bg-white transition-all">
+                        <MessageSquare size={24} />
+                    </div>
+                    <div className="text-left">
+                        <p className="font-black text-gray-800">Chat Consultation</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Connect instantly via text</p>
+                    </div>
+                </button>
+
+                <button 
+                    onClick={() => handleStartConsultation('audio')}
+                    disabled={consultLoading}
+                    className="w-full flex items-center gap-4 p-4 bg-white border-2 border-gray-100 rounded-3xl hover:border-purple-600 hover:bg-purple-50 group transition-all disabled:opacity-50"
+                >
+                    <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center group-hover:bg-white transition-all">
+                        <Phone size={24} />
+                    </div>
+                    <div className="text-left">
+                        <p className="font-black text-gray-800">Audio Call</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Speak directly with doctor</p>
+                    </div>
+                </button>
+
+                <button 
+                    onClick={() => handleStartConsultation('video')}
+                    disabled={consultLoading}
+                    className="w-full flex items-center gap-4 p-4 bg-white border-2 border-gray-100 rounded-3xl hover:border-purple-600 hover:bg-purple-50 group transition-all disabled:opacity-50"
+                >
+                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:bg-white transition-all">
+                        <Video size={24} />
+                    </div>
+                    <div className="text-left">
+                        <p className="font-black text-gray-800">Video Consultation</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Face-to-face virtual visit</p>
+                    </div>
+                </button>
+            </div>
+
+            {consultLoading && (
+                <div className="mt-6 flex flex-col items-center gap-2">
+                    <div className="w-6 h-6 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Initializing Session...</p>
+                </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

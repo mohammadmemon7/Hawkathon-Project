@@ -110,7 +110,11 @@ export function AppProvider({ children }) {
   }, [selectedDoctor]);
 
   const toggleLanguage = () => {
-    setLanguage((prev) => (prev === 'hi' ? 'en' : 'hi'));
+    setLanguage((prev) => {
+      if (prev === 'hi') return 'en';
+      if (prev === 'en') return 'pa';
+      return 'hi';
+    });
   };
 
   return (
@@ -126,6 +130,7 @@ export function AppProvider({ children }) {
         logoutDoctor,
         logout,
         language,
+        setLanguage,
         toggleLanguage,
         lastAnalysis,
         setLastAnalysis,

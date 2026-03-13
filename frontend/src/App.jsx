@@ -23,6 +23,10 @@ const DoctorAppointments = lazy(() => import('./pages/DoctorAppointments'));
 const MedicineAdmin = lazy(() => import('./pages/MedicineAdmin'));
 const SymptomResult = lazy(() => import('./pages/SymptomResult'));
 const DoctorDirectory = lazy(() => import('./pages/DoctorDirectory'));
+const ConsultationRoom = lazy(() => import('./pages/ConsultationRoom'));
+const HealthWorkerDashboard = lazy(() => import('./pages/HealthWorkerDashboard'));
+const VillageHealthMap = lazy(() => import('./pages/VillageHealthMap'));
+const SmsSimulator = lazy(() => import('./pages/SmsSimulator'));
 
 function RequirePatient({ children }) {
   const { patient } = useContext(AppContext);
@@ -59,12 +63,16 @@ export default function App() {
             <Route path="/result" element={<RequirePatient><DashboardLayout><TriageResult /></DashboardLayout></RequirePatient>} />
             <Route path="/symptom-result" element={<RequirePatient><DashboardLayout><SymptomResult /></DashboardLayout></RequirePatient>} />
             <Route path="/doctors" element={<RequirePatient><DashboardLayout><DoctorDirectory /></DashboardLayout></RequirePatient>} />
+            <Route path="/consult/:id" element={<RequirePatient><DashboardLayout><ConsultationRoom /></DashboardLayout></RequirePatient>} />
             <Route path="/talk" element={<RequirePatient><DashboardLayout><TalkToDoctor /></DashboardLayout></RequirePatient>} />
             <Route path="/book-appointment" element={<RequirePatient><DashboardLayout><BookAppointment /></DashboardLayout></RequirePatient>} />
             <Route path="/consultation/:id" element={<RequirePatient><DashboardLayout><ConsultationDetail /></DashboardLayout></RequirePatient>} />
             <Route path="/medicines" element={<RequirePatient><DashboardLayout><MedicineFinder /></DashboardLayout></RequirePatient>} />
             <Route path="/profile/:id" element={<RequirePatient><DashboardLayout><PatientProfile /></DashboardLayout></RequirePatient>} />
             <Route path="/records" element={<RequirePatient><DashboardLayout><MyRecords /></DashboardLayout></RequirePatient>} />
+            <Route path="/analytics" element={<RequirePatient><DashboardLayout><VillageHealthMap /></DashboardLayout></RequirePatient>} />
+            <Route path="/sms" element={<RequirePatient><DashboardLayout><SmsSimulator /></DashboardLayout></RequirePatient>} />
+            <Route path="/worker" element={<HealthWorkerDashboard />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

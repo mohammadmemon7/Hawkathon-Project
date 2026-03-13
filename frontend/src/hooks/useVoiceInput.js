@@ -24,7 +24,8 @@ export default function useVoiceInput({ language = 'hi' } = {}) {
 
     setTranscript('');
     const recognition = new SpeechRecognition();
-    recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+    const langMap = { hi: 'hi-IN', en: 'en-IN', pa: 'pa-IN' };
+    recognition.lang = langMap[language] || 'hi-IN';
     recognition.interimResults = true;
     recognition.continuous = true;
 

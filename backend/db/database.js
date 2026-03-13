@@ -82,6 +82,51 @@ db.exec(`
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS medicine_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    medicine_id INTEGER NOT NULL,
+    patient_id INTEGER,
+    reported_available INTEGER NOT NULL,
+    comment TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(medicine_id) REFERENCES medicines(id),
+    FOREIGN KEY(patient_id) REFERENCES patients(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS village_health_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    village TEXT NOT NULL,
+    disease TEXT NOT NULL,
+    case_count INTEGER DEFAULT 1,
+    reported_by TEXT DEFAULT 'system',
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS health_workers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    worker_id_code TEXT UNIQUE NOT NULL,
+    village TEXT NOT NULL,
+    phone TEXT,
+    password TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS patient_vitals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL,
+    worker_id INTEGER NOT NULL,
+    temperature REAL,
+    bp_sys INTEGER,
+    bp_dia INTEGER,
+    pulse INTEGER,
+    spo2 INTEGER,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(patient_id) REFERENCES patients(id),
+    FOREIGN KEY(worker_id) REFERENCES health_workers(id)
+  );
+
   CREATE TABLE IF NOT EXISTS appointments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     patient_id INTEGER NOT NULL,
@@ -130,6 +175,72 @@ db.exec(`
     matched_symptoms TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (patient_id) REFERENCES patients(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS consultation_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL,
+    doctor_id INTEGER NOT NULL,
+    mode TEXT NOT NULL CHECK(mode IN ('chat','audio','video')),
+    status TEXT DEFAULT 'requested' CHECK(status IN ('requested','accepted','active','completed','cancelled')),
+    meeting_code TEXT,
+    started_at DATETIME,
+    ended_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(patient_id) REFERENCES patients(id),
+    FOREIGN KEY(doctor_id) REFERENCES doctors(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS consultation_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    sender_type TEXT NOT NULL CHECK(sender_type IN ('patient','doctor')),
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(session_id) REFERENCES consultation_sessions(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS prescriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    doctor_id INTEGER NOT NULL,
+    patient_id INTEGER NOT NULL,
+    medicines TEXT,            -- JSON string array
+    instructions TEXT,
+    follow_up TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(session_id) REFERENCES consultation_sessions(id)
+  );
+  CREATE TABLE IF NOT EXISTS health_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL,
+    doctor_id INTEGER NOT NULL,
+    session_id INTEGER,                 -- telemed session id (nullable)
+    diagnosis TEXT,
+    consultation_notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(patient_id) REFERENCES patients(id),
+    FOREIGN KEY(doctor_id) REFERENCES doctors(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS health_record_prescriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id INTEGER NOT NULL,
+    medicines TEXT,                     -- JSON array of strings
+    instructions TEXT,
+    follow_up TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(record_id) REFERENCES health_records(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS lab_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id INTEGER NOT NULL,
+    file_name TEXT,
+    file_type TEXT,
+    file_url TEXT,                      -- for prototype: local path or placeholder
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(record_id) REFERENCES health_records(id)
   );
 `);
 

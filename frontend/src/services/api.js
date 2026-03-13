@@ -130,6 +130,24 @@ export async function searchMedicines(name) {
   }
 }
 
+export async function searchMedicinesAdvanced(params) {
+  try {
+    const res = await withRetry(() => api.get('/medicines/search', { params }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getMedicinePharmacies(params) {
+  try {
+    const res = await withRetry(() => api.get('/medicines/pharmacies', { params }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
 export async function getAllMedicines(page = 1, limit = 100) {
   try {
     const res = await withRetry(() => api.get('/medicines/all', { params: { page, limit } }));
@@ -148,9 +166,20 @@ export async function getMedicineLastUpdated() {
   }
 }
 
-export async function updateMedicine(id, data) {
+export async function updateMedicineStock(id, data) {
   try {
     const res = await withRetry(() => api.patch(`/medicines/${id}`, data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+// Legacy alias
+export const updateMedicine = updateMedicineStock;
+
+export async function reportMedicineFeedback(id, payload) {
+  try {
+    const res = await withRetry(() => api.post(`/medicines/${id}/feedback`, payload));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;
@@ -297,6 +326,182 @@ export async function updateDoctorStatus(id, status) {
 export async function analyzeSymptomsLite(data) {
   try {
     const res = await withRetry(() => api.post('/symptom-checker/analyze', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+// Telemedicine Consultation Sessions
+export async function createTelemedSession(data) {
+  try {
+    const res = await withRetry(() => api.post('/telemed/sessions', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getPatientTelemedSessions(patientId) {
+  try {
+    const res = await withRetry(() => api.get(`/telemed/sessions/patient/${patientId}`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getDoctorTelemedSessions(doctorId, status) {
+  try {
+    const res = await withRetry(() => api.get(`/telemed/sessions/doctor/${doctorId}`, { 
+      params: status ? { status } : undefined 
+    }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function acceptTelemedSession(sessionId, doctorId) {
+  try {
+    const res = await withRetry(() => api.patch(`/telemed/sessions/${sessionId}/accept`, { doctor_id: doctorId }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function completeTelemedSession(sessionId, doctorId) {
+  try {
+    const res = await withRetry(() => api.patch(`/telemed/sessions/${sessionId}/complete`, { doctor_id: doctorId }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function sendTelemedMessage(sessionId, sender_type, message) {
+  try {
+    const res = await withRetry(() => api.post(`/telemed/sessions/${sessionId}/messages`, { sender_type, message }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getTelemedMessages(sessionId) {
+  try {
+    const res = await withRetry(() => api.get(`/telemed/sessions/${sessionId}/messages`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function upsertPrescription(sessionId, payload) {
+  try {
+    const res = await withRetry(() => api.post(`/telemed/sessions/${sessionId}/prescription`, payload));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getPrescription(sessionId) {
+  try {
+    const res = await withRetry(() => api.get(`/telemed/sessions/${sessionId}/prescription`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getTelemedSummary(sessionId) {
+  try {
+    const res = await withRetry(() => api.get(`/telemed/sessions/${sessionId}/summary`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+// Health Records
+export async function getPatientRecords(patientId, params = {}) {
+  try {
+    const res = await withRetry(() => api.get(`/records/patient/${patientId}`, { params }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function createHealthRecord(data) {
+  try {
+    const res = await withRetry(() => api.post('/records', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function updateHealthRecord(id, data) {
+  try {
+    const res = await withRetry(() => api.patch(`/records/${id}`, data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function addLabReport(recordId, data) {
+  try {
+    const res = await withRetry(() => api.post(`/records/${recordId}/lab-report`, data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+// Health Worker Dashboard
+export async function loginHealthWorker(worker_id_code, password) {
+  try {
+    const res = await withRetry(() => api.post('/workers/login', { worker_id_code, password }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function registerPatientByWorker(data) {
+  try {
+    const res = await withRetry(() => api.post('/workers/register-patient', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function uploadPatientVitals(data) {
+  try {
+    const res = await withRetry(() => api.post('/workers/vitals', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function findPatientByPhone(phone) {
+  try {
+    const res = await withRetry(() => api.get('/workers/patient-search', { params: { phone } }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getWorkerHistory(id) {
+  try {
+    const res = await withRetry(() => api.get(`/workers/${id}/history`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;

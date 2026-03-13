@@ -4,6 +4,7 @@ import {
   RefreshCw, 
   Video, 
   Phone, 
+  MessageSquare,
   CheckCircle, 
   XCircle, 
   Search, 
@@ -24,7 +25,9 @@ import {
   acceptCall, 
   completeCall, 
   toggleDoctorAvailability,
-  getDoctorAppointments
+  getDoctorAppointments,
+  getDoctorTelemedSessions,
+  acceptTelemedSession
 } from '../services/api';
 import PatientCard from '../components/PatientCard';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -36,6 +39,7 @@ export default function DoctorDashboard() {
   const [consultations, setConsultations] = useState([]);
   const [calls, setCalls] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [telemedSessions, setTelemedSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -47,13 +51,15 @@ export default function DoctorDashboard() {
   const fetchData = useCallback(async (showSpinner) => {
     if (showSpinner) setRefreshing(true);
     try {
-      const [consRes, callsRes, apptsRes] = await Promise.all([
+      const [consRes, callsRes, apptsRes, telemedRes] = await Promise.all([
         getPendingConsultations(1, 100),
         getPendingCalls(),
-        getDoctorAppointments(currentDoctor.id)
+        getDoctorAppointments(currentDoctor.id),
+        getDoctorTelemedSessions(currentDoctor.id, 'requested')
       ]);
       setConsultations(Array.isArray(consRes) ? consRes : (consRes.data || []));
       setCalls(callsRes);
+      setTelemedSessions(telemedRes);
       // Filter today's appointments for the dashboard
       const today = new Date().toISOString().split('T')[0];
       setAppointments(apptsRes.filter(a => a.appointment_date === today));
@@ -96,6 +102,16 @@ export default function DoctorDashboard() {
       fetchData(false);
     } catch (err) {
       alert("Failed to complete call");
+    }
+  };
+
+  const handleAcceptTelemedSession = async (sessionId) => {
+    try {
+        const accepted = await acceptTelemedSession(sessionId, currentDoctor.id);
+        navigate(`/consult/${sessionId}`, { state: { session: accepted } });
+    } catch (err) {
+        console.error("Failed to accept telemed session:", err);
+        alert("Failed to accept session.");
     }
   };
 
@@ -161,6 +177,7 @@ export default function DoctorDashboard() {
       <div className="flex items-center gap-2 bg-white/50 p-2 rounded-2xl border border-gray-100 w-fit">
          {[
            { id: 'triage', label: 'Triage Queue', icon: <Activity size={18} />, count: consultations.length },
+           { id: 'telemed', label: 'Telemedicine', icon: <MessageSquare size={18} />, count: telemedSessions.length },
            { id: 'calls', label: 'Call Requests', icon: <Video size={18} />, count: calls.length },
            { id: 'appointments', label: 'Today\'s Schedule', icon: <Calendar size={18} />, count: appointments.length }
          ].map(tab => (
@@ -244,6 +261,48 @@ export default function DoctorDashboard() {
                   />
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* TELEMEDICINE TAB */}
+        {activeTab === 'telemed' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {telemedSessions.length === 0 ? (
+              <div className="md:col-span-2 lg:col-span-3 bg-white rounded-[40px] p-20 text-center border-2 border-dashed border-gray-100">
+                <MessageSquare size={64} className="mx-auto mb-6 text-gray-200" />
+                <h3 className="text-xl font-black text-gray-800 mb-2">No Telemed Requests</h3>
+                <p className="text-gray-400 font-medium">Remote consultation requests will appear here.</p>
+              </div>
+            ) : (
+                telemedSessions.map(session => (
+                    <div key={session.id} className="bg-white rounded-3xl p-6 border border-purple-50 shadow-sm shadow-purple-900/5 hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                                    {session.mode === 'chat' ? <MessageSquare size={22} /> : 
+                                     session.mode === 'audio' ? <Phone size={22} /> : <Video size={22} />}
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-gray-800">{session.patient_name}</h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{session.mode} Consultation</p>
+                                </div>
+                            </div>
+                            <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-[9px] font-black uppercase tracking-widest">
+                                REQUESTED
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => handleAcceptTelemedSession(session.id)}
+                                className="flex-1 py-3 bg-purple-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-purple-200 hover:bg-purple-700 transition-all uppercase tracking-widest"
+                            >
+                                Accept & Join
+                            </button>
+                        </div>
+                    </div>
+                ))
             )}
           </div>
         )}

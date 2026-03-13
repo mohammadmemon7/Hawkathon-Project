@@ -166,6 +166,94 @@ function runSeed() {
   upsertPharmacies();
   upsertVillages();
   upsertMedicines();
+  upsertHealthWorkers();
+  upsertHealthReports();
+}
+
+function upsertHealthReports() {
+  // Drop old data to keep demo fresh
+  db.prepare('DELETE FROM village_health_reports').run();
+
+  const reports = [
+    // HIGH RISK VILLAGES
+    ['Nabha',             'Fever',      42, 'ASHA-101'],
+    ['Nabha',             'Flu',        18, 'ASHA-101'],
+    ['Nabha',             'Dengue',      7, 'system'],
+    ['Nabha',             'Diarrhea',   11, 'ASHA-101'],
+
+    ['Rohti Chhanna',     'Fever',      37, 'ASHA-102'],
+    ['Rohti Chhanna',     'Malaria',    14, 'system'],
+    ['Rohti Chhanna',     'Typhoid',     9, 'ASHA-102'],
+
+    ['Patiala Road',      'Fever',      31, 'system'],
+    ['Patiala Road',      'Flu',        22, 'system'],
+    ['Patiala Road',      'Dengue',      5, 'system'],
+
+    // MEDIUM RISK VILLAGES
+    ['Bhadson',           'Fever',      19, 'ASHA-102'],
+    ['Bhadson',           'Diarrhea',    8, 'ASHA-102'],
+    ['Bhadson',           'Flu',         6, 'ASHA-102'],
+
+    ['Kheri Jattan',      'Fever',      16, 'system'],
+    ['Kheri Jattan',      'Typhoid',    10, 'ASHA-101'],
+
+    ['Dhanauri',          'Fever',      21, 'system'],
+    ['Dhanauri',          'TB',          4, 'system'],
+
+    ['Ramgarh',           'Flu',        14, 'system'],
+    ['Ramgarh',           'Fever',       9, 'system'],
+
+    ['Ghanurki',          'Dengue',     12, 'ASHA-101'],
+    ['Ghanurki',          'Fever',       8, 'ASHA-101'],
+
+    // LOW RISK VILLAGES
+    ['Thuhi',             'Flu',         6, 'system'],
+    ['Thuhi',             'Fever',       4, 'system'],
+
+    ['Binaheri',          'Diarrhea',    5, 'system'],
+
+    ['Kaidupur',          'Fever',       7, 'ASHA-101'],
+    ['Kaidupur',          'Flu',         3, 'system'],
+
+    ['Akalgarh',          'Fever',       4, 'system'],
+    ['Akalgarh',          'Malaria',     2, 'system'],
+
+    ['Simbro',            'Flu',         3, 'system'],
+    ['Mandaur',           'Typhoid',     2, 'system'],
+    ['Lohar Majra',       'Fever',       5, 'system'],
+    ['Chaswal',           'Diarrhea',    3, 'system'],
+    ['Mehargarh Batti',   'Fever',       6, 'system'],
+    ['Harigarh Gehlan',   'Fever',       3, 'system'],
+    ['Dhingi',            'TB',          1, 'system'],
+    ['Pedni Khurd',       'Flu',         2, 'system'],
+  ];
+
+  const insert = db.prepare(
+    'INSERT INTO village_health_reports (village, disease, case_count, reported_by) VALUES (?, ?, ?, ?)'
+  );
+
+  const insertAll = db.transaction((rows) => {
+    for (const r of rows) insert.run(...r);
+  });
+
+  insertAll(reports);
+  console.log(`✅ Village health reports seeded (${reports.length} records)`);
+}
+
+function upsertHealthWorkers() {
+  const insertWorker = db.prepare(
+    'INSERT OR IGNORE INTO health_workers (name, worker_id_code, village, phone, password) VALUES (?, ?, ?, ?, ?)'
+  );
+  
+  const workers = [
+    ['Anita Devi', 'ASHA-101', 'Nabha', '9876543210', 'asha123'],
+    ['Kavita Rani', 'ASHA-102', 'Bhadson', '9876543211', 'asha123']
+  ];
+
+  for (const worker of workers) {
+    insertWorker.run(...worker);
+  }
+  console.log(`✅ Health Workers seeded (${workers.length})`);
 }
 
 if (require.main === module) {

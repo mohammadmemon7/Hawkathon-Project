@@ -1,230 +1,462 @@
-import { useState, useEffect } from 'react';
-import { Search, Loader2, Clock, MapPin, Pill, Info } from 'lucide-react';
-import { searchMedicines, getMedicineLastUpdated } from '../services/api';
+import { useState, useEffect, useContext, useMemo } from 'react';
+import { 
+  Search, 
+  Loader2, 
+  Clock, 
+  MapPin, 
+  Pill, 
+  Info, 
+  Filter, 
+  ChevronRight, 
+  AlertCircle,
+  Truck,
+  Store,
+  CheckCircle,
+  XCircle,
+  TrendingDown,
+  Navigation,
+  RefreshCw,
+  WifiOff,
+  MessageSquare,
+  X
+} from 'lucide-react';
+import { getMedicinePharmacies, getMedicineLastUpdated, reportMedicineFeedback } from '../services/api';
+import { AppContext } from '../context/AppContext';
 
 const QUICK_SEARCHES = ['Paracetamol', 'ORS', 'Amoxicillin', 'Metformin', 'Ibuprofen'];
 
 export default function MedicineFinder() {
+  const { lowBw, language, currentPatient } = useContext(AppContext);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState(null);
+  const [pharmacies, setPharmacies] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [isOffline, setIsOffline] = useState(false);
+  
+  // Feedback Modal State
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [activeMed, setActiveMed] = useState(null);
+  const [feedbackData, setFeedbackData] = useState({ reported_available: 0, comment: '' });
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Filters
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('distance'); 
+  const [maxDistance, setMaxDistance] = useState('20');
+
+  const t = {
+    title: language === 'hi' ? 'दवाई ढूँढें' : 'Medicine Finder',
+    subtitle: language === 'hi' ? 'अपने पास की दवाइयाँ खोजें' : 'Search nearby pharmacies',
+    placeholder: language === 'hi' ? 'दवाई का नाम लिखें (जैसे Paracetamol)...' : 'Search medicine name...',
+    searchBtn: language === 'hi' ? 'खोजें' : 'Search',
+    lastUpdated: language === 'hi' ? 'अंतिम अपडेट' : 'Last Updated',
+    filters: language === 'hi' ? 'फिल्टर' : 'Filters',
+    available: language === 'hi' ? 'केवल उपलब्ध' : 'Available only',
+    sortBy: language === 'hi' ? 'क्रम' : 'Sort by',
+    distance: language === 'hi' ? 'दूरी' : 'Distance',
+    price: language === 'hi' ? 'कीमत' : 'Price',
+    stock: language === 'hi' ? 'स्टॉक' : 'Stock',
+    radius: language === 'hi' ? 'दायरा' : 'Radius',
+    noResults: language === 'hi' ? 'इस दवाई का रिजल्ट नहीं मिला' : 'No results found for this medicine',
+    tryAgain: language === 'hi' ? 'अलग स्पेलिंग टाइप करके देखें' : 'Try checking the spelling or use a generic name.',
+    nearest: language === 'hi' ? 'सबसे पास' : 'Nearest Pharmacy',
+    fetching: language === 'hi' ? 'खोज रहे हैं...' : 'Searching your village...',
+    inStock: language === 'hi' ? 'स्टॉक में है' : 'In Stock',
+    outStock: language === 'hi' ? 'स्टॉक खत्म' : 'Out of Stock',
+    feedbackBtn: language === 'hi' ? 'स्टॉक गलत है?' : 'Stock incorrect?',
+    feedbackTitle: language === 'hi' ? 'फीडबैक दें' : 'Submit Feedback',
+    feedbackAvailable: language === 'hi' ? 'दवाई उपलब्ध है' : 'Medicine is available',
+    feedbackUnavailable: language === 'hi' ? 'दवाई उपलब्ध नहीं है' : 'Medicine is out of stock',
+    feedbackPlaceholder: language === 'hi' ? 'कुछ और लिखना चाहते हैं?' : 'Any other comments?',
+    submitFeedback: language === 'hi' ? 'सबमिट करें' : 'Submit feedback',
+  };
 
   useEffect(() => {
-    getMedicineLastUpdated().then(res => setLastUpdated(res.last_updated)).catch(console.error);
+    refreshLastUpdated();
     
-    // Load last search from cache
-    const cached = localStorage.getItem('sehatsetu_last_med_search');
+    const cached = localStorage.getItem('sehatsetu_last_query');
     if (cached) {
-      const { query: q, results: r } = JSON.parse(cached);
-      setQuery(q);
-      setResults(r);
+      const { name, availableOnly: ao, maxDistance: md, sortBy: sb, results } = JSON.parse(cached);
+      setQuery(name || '');
+      setAvailableOnly(!!ao);
+      setMaxDistance(md || '20');
+      setSortBy(sb || 'distance');
+      setPharmacies(results);
     }
   }, []);
 
-  const handleSearch = async (name) => {
-    const term = name || query;
-    if (!term.trim()) return;
-    setLoading(true);
+  const refreshLastUpdated = async () => {
     try {
-      const data = await searchMedicines(term.trim());
-      setResults(data);
-      localStorage.setItem('sehatsetu_last_med_search', JSON.stringify({ query: term.trim(), results: data }));
-    } catch {
-      // On failure, check if we have data for THIS exact query in cache
-      const cached = localStorage.getItem('sehatsetu_last_med_search');
+        const res = await getMedicineLastUpdated();
+        setLastUpdated(res.last_updated);
+    } catch(e) {}
+  };
+
+  const handleSearch = async (overrideName = null) => {
+    const term = (overrideName !== null ? overrideName : query).trim();
+    if (!term) return;
+
+    setLoading(true);
+    setIsOffline(false);
+    const cacheKey = `medicineSearch:${term}:${availableOnly}:${maxDistance}:${sortBy}`;
+
+    try {
+      const params = {
+        name: term,
+        availableOnly: availableOnly ? '1' : '0',
+        maxDistanceKm: maxDistance,
+        sort: sortBy
+      };
+      const data = await getMedicinePharmacies(params);
+      setPharmacies(data);
+      
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem('sehatsetu_last_query', JSON.stringify({
+          name: term,
+          availableOnly,
+          maxDistance,
+          sortBy,
+          results: data
+      }));
+
+      refreshLastUpdated();
+    } catch (err) {
+      console.error("Search failed:", err);
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
-        const { query: q, results: r } = JSON.parse(cached);
-        if (q.toLowerCase() === term.trim().toLowerCase()) {
-           setResults(r);
-           return;
-        }
+        setPharmacies(JSON.parse(cached));
+        setIsOffline(true);
+      } else {
+        setPharmacies([]);
       }
-      setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') handleSearch();
-  };
-
-  const handleChip = (name) => {
+  const handleChipClick = (name) => {
     setQuery(name);
     handleSearch(name);
   };
 
-  // Group by pharmacy, sorted by distance
-  const grouped = results
-    ? results.reduce((acc, med) => {
-        const key = med.pharmacy_name;
-        if (!acc[key]) acc[key] = { pharmacy: key, distance: med.distance_km, items: [] };
-        acc[key].items.push(med);
-        return acc;
-      }, {})
-    : null;
+  const openFeedback = (med) => {
+    setActiveMed(med);
+    setFeedbackData({ reported_available: med.available === 1 ? 0 : 1, comment: '' });
+    setShowFeedbackModal(true);
+  };
 
-  const sortedGroups = grouped
-    ? Object.values(grouped).sort((a, b) => a.distance - b.distance)
-    : null;
-
-  const getTimeAgo = (timestamp) => {
-    if (!timestamp) return '...';
-    const seconds = Math.floor((new Date() - new Date(timestamp)) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    return `${Math.floor(minutes / 60)}h ago`;
+  const handleSubmitFeedback = async () => {
+    if (!activeMed) return;
+    setSubmittingFeedback(true);
+    try {
+        await reportMedicineFeedback(activeMed.id, {
+            patient_id: currentPatient?.id,
+            ...feedbackData
+        });
+        alert(language === 'hi' ? 'आपका फीडबैक सबमिट हो गया है!' : 'Thank you for your feedback!');
+        setShowFeedbackModal(false);
+    } catch (err) {
+        console.error("Feedback error:", err);
+    } finally {
+        setSubmittingFeedback(false);
+    }
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-8 pb-24">
+    <div className={`p-4 md:p-8 space-y-8 pb-32 ${lowBw ? 'no-animations' : ''}`}>
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-200">
-             <Pill size={24} />
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-emerald-600 text-white rounded-[20px] flex items-center justify-center shadow-xl shadow-emerald-100">
+             <Pill size={32} />
           </div>
           <div>
-             <h1 className="text-2xl font-black text-gray-800">Dawai Dhundho</h1>
-             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Find Medicines Near You</p>
+             <h1 className="text-3xl font-black text-gray-800 tracking-tight">{t.title}</h1>
+             <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{t.subtitle}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl text-emerald-700 border border-emerald-100">
-           <Clock size={16} />
-           <span className="text-xs font-black uppercase tracking-wider">Update: {getTimeAgo(lastUpdated)}</span>
-        </div>
+        {lastUpdated && (
+            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.lastUpdated}</span>
+                    <span className="text-xs font-bold text-gray-700">{new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <RefreshCw 
+                    size={16} 
+                    className="ml-2 text-emerald-600 cursor-pointer hover:rotate-180 transition-transform" 
+                    onClick={refreshLastUpdated}
+                />
+            </div>
+        )}
       </div>
 
       {/* Search Bar */}
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="max-w-3xl mx-auto w-full space-y-6">
         <div className="relative group">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-600 transition-colors" size={20} />
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-emerald-600 transition-colors" size={24} />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search by medicine name (e.g. Paracetamol)..."
-            className="w-full pl-14 pr-6 py-5 bg-white border border-gray-100 rounded-3xl shadow-sm focus:ring-8 focus:ring-emerald-500/5 focus:border-emerald-500/40 outline-none text-lg font-medium transition-all"
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder={t.placeholder}
+            className="w-full pl-16 pr-32 py-6 bg-white border border-gray-100 rounded-[32px] shadow-sm focus:shadow-2xl focus:shadow-emerald-900/5 focus:border-emerald-500/30 outline-none text-xl font-bold text-gray-700 transition-all placeholder:text-gray-200"
           />
           <button
             onClick={() => handleSearch()}
             disabled={loading}
-            className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black transition-all hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
+            className="absolute right-3 top-3 bottom-3 px-8 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
           >
-            Search
+            {loading ? <RefreshCw className="animate-spin" size={20} /> : t.searchBtn}
           </button>
         </div>
 
-        {results === null && (
-          <div className="flex flex-wrap gap-2 justify-center pt-2">
-            {QUICK_SEARCHES.map((name) => (
-              <button
-                key={name}
-                onClick={() => handleChip(name)}
-                className="px-6 py-2.5 rounded-full text-sm font-bold border border-gray-100 bg-white text-gray-500 hover:border-emerald-200 hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2 justify-center">
+          {QUICK_SEARCHES.map((name) => (
+            <button
+              key={name}
+              onClick={() => handleChipClick(name)}
+              className="px-5 py-2 rounded-full text-xs font-black border border-gray-100 bg-white text-gray-400 hover:border-emerald-600 hover:text-emerald-600 transition-all flex items-center gap-2 group shadow-sm active:scale-95"
+            >
+              <TrendingDown size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+              {name}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex flex-col items-center py-20 animate-in fade-in zoom-in-95">
-          <div className="relative">
-            <Loader2 size={48} className="animate-spin text-emerald-600" />
-            <div className="absolute inset-0 bg-emerald-100/20 blur-xl rounded-full animate-pulse"></div>
+      {/* Offline Banner */}
+      {isOffline && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 flex items-center justify-center gap-3 text-amber-800">
+              <WifiOff size={20} className="text-amber-600" />
+              <p className="text-sm font-black uppercase tracking-widest">
+                  {language === 'hi' ? 'ऑफलाइन - पुराना डेटा दिखाया जा रहा है' : 'Offline - Showing cached records'}
+              </p>
           </div>
-          <p className="mt-6 text-sm font-bold text-gray-400 uppercase tracking-[0.2em] animate-pulse">Searching near your village...</p>
-        </div>
       )}
 
-      {/* Results */}
-      {!loading && results !== null && (
-        results.length === 0 ? (
-          <div className="bg-white rounded-[40px] p-20 text-center border-2 border-dashed border-gray-100 max-w-xl mx-auto">
-             <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <Info size={32} className="text-gray-300" />
+      {/* Filters Row */}
+      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-4 bg-gray-50/50 p-6 rounded-[32px] border border-white/50 border-gray-100">
+        <label className="flex items-center gap-3 cursor-pointer group">
+            <div 
+                onClick={() => setAvailableOnly(!availableOnly)}
+                className={`w-12 h-6 rounded-full p-1 transition-all ${availableOnly ? 'bg-emerald-600' : 'bg-gray-200'}`}
+            >
+                <div className={`w-4 h-4 bg-white rounded-full transition-all ${availableOnly ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            </div>
+            <span className="text-xs font-black text-gray-500 uppercase tracking-widest group-hover:text-emerald-600">{t.available}</span>
+        </label>
+
+        <div className="h-6 w-px bg-gray-200 mx-2 hidden md:block"></div>
+
+        <div className="flex items-center gap-3">
+            <Filter size={16} className="text-gray-400" />
+            <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-transparent text-xs font-black text-gray-700 uppercase tracking-widest outline-none cursor-pointer hover:text-emerald-600"
+            >
+                <option value="distance">{t.sortBy}: {t.distance}</option>
+                <option value="price">{t.sortBy}: {t.price}</option>
+                <option value="stock">{t.sortBy}: {t.stock}</option>
+            </select>
+        </div>
+
+        <div className="h-6 w-px bg-gray-200 mx-2 hidden md:block"></div>
+
+        <div className="flex items-center gap-3">
+            <Navigation size={16} className="text-gray-400" />
+            <select 
+                value={maxDistance} 
+                onChange={(e) => setMaxDistance(e.target.value)}
+                className="bg-transparent text-xs font-black text-gray-700 uppercase tracking-widest outline-none cursor-pointer hover:text-emerald-600"
+            >
+                <option value="2">{t.radius}: 2km</option>
+                <option value="5">{t.radius}: 5km</option>
+                <option value="10">{t.radius}: 10km</option>
+                <option value="20">{t.radius}: 20km</option>
+                <option value="50">{t.radius}: 50km</option>
+            </select>
+        </div>
+      </div>
+
+      {/* Results Section */}
+      <div className="max-w-6xl mx-auto space-y-10">
+        {loading ? (
+          <div className="py-24 flex flex-col items-center justify-center space-y-6">
+                <div className="relative">
+                    <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
+                    <Pill size={24} className="absolute inset-0 m-auto text-emerald-600/30" />
+                </div>
+                <p className="font-black text-gray-400 uppercase tracking-[0.3em] text-xs">{t.fetching}</p>
+          </div>
+        ) : pharmacies === null ? (
+            <div className="py-20 text-center space-y-6 flex flex-col items-center">
+                 <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center text-gray-200">
+                    <Store size={48} />
+                 </div>
+                 <p className="text-gray-400 font-bold max-w-xs">{language === 'hi' ? 'दवाई का नाम ढूंढें और आपके गाँव के पास उपलब्ध फार्मेसी देखें' : 'Enter a medicine name to find pharmacies near your village.'}</p>
+            </div>
+        ) : pharmacies.length === 0 ? (
+          <div className="bg-white rounded-[40px] p-24 text-center border-2 border-dashed border-gray-100 max-w-2xl mx-auto flex flex-col items-center">
+             <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mb-8">
+                <AlertCircle size={40} />
              </div>
-             <h2 className="text-xl font-black text-gray-800 mb-2">Medicine Not Found</h2>
-             <p className="text-gray-400 font-medium leading-relaxed">We couldn't find this medicine nearby. Please check the spelling or try a common name.</p>
+             <h2 className="text-2xl font-black text-gray-800 mb-3">{t.noResults}</h2>
+             <p className="text-gray-400 font-bold max-w-sm">{t.tryAgain}</p>
           </div>
         ) : (
-          <div className="grid gap-8">
-            {sortedGroups.map((group) => (
-              <div key={group.pharmacy} className="space-y-4">
-                <div className="flex items-center gap-2 px-4">
-                    <MapPin className="text-gray-400" size={16} />
-                    <h3 className="font-black text-gray-400 text-xs uppercase tracking-widest">
-                    Available at {group.pharmacy} 
-                    <span className="ml-2 text-emerald-600 font-black">• {group.distance} km away</span>
-                    </h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {group.items.map((med) => (
-                    <InventoryItem key={med.id} med={med} />
-                  ))}
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {pharmacies.map((pharmacy, idx) => (
+              <PharmacyCard key={idx} pharmacy={pharmacy} t={t} onFeedback={openFeedback} />
             ))}
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-function InventoryItem({ med }) {
-  const isAvailable = med.available === 1;
-  const isLowStock = isAvailable && med.stock_count < 10;
-  
-  return (
-    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all group overflow-hidden relative">
-      <div className="flex justify-between items-start mb-6">
-        <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black group-hover:bg-emerald-600 group-hover:text-white transition-all">
-          <Pill size={24} />
-        </div>
-        <div className="text-right">
-          <span className="text-2xl font-black text-gray-800 block">₹{med.price}</span>
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">MRP per unit</span>
-        </div>
-      </div>
-
-      <h3 className="text-lg font-black text-gray-800 mb-4">{med.name}</h3>
-
-      <div className="space-y-3">
-        {isAvailable ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-green-500" />
-                <span className="text-sm font-bold text-green-700">Available</span>
-            </div>
-            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${isLowStock ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                Stock: {med.stock_count}
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-             <XCircle size={16} className="text-red-400" />
-             <span className="text-sm font-bold text-red-500">Out of Stock</span>
           </div>
         )}
       </div>
 
-      {isAvailable && (
-        <button className="w-full mt-6 py-3 bg-gray-50 hover:bg-emerald-600 hover:text-white text-emerald-700 rounded-2xl font-black text-sm transition-all border border-gray-100">
-           Request Availability
-        </button>
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-[40px] w-full max-w-md p-8 relative shadow-2xl overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
+                <button onClick={() => setShowFeedbackModal(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-800 transition-colors">
+                    <X size={24} />
+                </button>
+
+                <div className="relative space-y-6">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                            <MessageSquare size={24} />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-800">{t.feedbackTitle}</h2>
+                    </div>
+
+                    <p className="text-sm font-bold text-gray-500">
+                        {language === 'hi' ? `क्या ${activeMed?.name} का स्टॉक सही है?` : `Is the stock information for ${activeMed?.name} correct?`}
+                    </p>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        <button 
+                            onClick={() => setFeedbackData({ ...feedbackData, reported_available: 1 })}
+                            className={`p-4 rounded-3xl border-2 transition-all flex items-center justify-between group ${feedbackData.reported_available === 1 ? 'border-emerald-600 bg-emerald-50' : 'border-gray-50 bg-gray-50'}`}
+                        >
+                            <span className={`font-black uppercase tracking-widest text-xs ${feedbackData.reported_available === 1 ? 'text-emerald-700' : 'text-gray-400'}`}>{t.feedbackAvailable}</span>
+                            <CheckCircle size={20} className={feedbackData.reported_available === 1 ? 'text-emerald-600' : 'text-gray-200'} />
+                        </button>
+                        <button 
+                            onClick={() => setFeedbackData({ ...feedbackData, reported_available: 0 })}
+                            className={`p-4 rounded-3xl border-2 transition-all flex items-center justify-between group ${feedbackData.reported_available === 0 ? 'border-red-600 bg-red-50' : 'border-gray-50 bg-gray-50'}`}
+                        >
+                            <span className={`font-black uppercase tracking-widest text-xs ${feedbackData.reported_available === 0 ? 'text-red-700' : 'text-gray-400'}`}>{t.feedbackUnavailable}</span>
+                            <XCircle size={20} className={feedbackData.reported_available === 0 ? 'text-red-600' : 'text-gray-200'} />
+                        </button>
+                    </div>
+
+                    <textarea 
+                        value={feedbackData.comment}
+                        onChange={(e) => setFeedbackData({ ...feedbackData, comment: e.target.value })}
+                        placeholder={t.feedbackPlaceholder}
+                        className="w-full p-6 bg-gray-50 border border-gray-100 rounded-3xl h-32 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500/20 font-bold text-gray-700 transition-all"
+                    />
+
+                    <button 
+                        onClick={handleSubmitFeedback}
+                        disabled={submittingFeedback}
+                        className="w-full py-5 bg-emerald-600 text-white rounded-3xl font-black uppercase tracking-widest hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shadow-xl shadow-emerald-500/20"
+                    >
+                        {submittingFeedback ? <RefreshCw className="animate-spin" size={20} /> : t.submitFeedback}
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );
 }
 
-function XCircle({ size, className }) {
-    return <Info size={size} className={className} />; // Fallback for XCircle
+function PharmacyCard({ pharmacy, t, onFeedback }) {
+    return (
+        <div className="bg-white rounded-[44px] p-8 border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-emerald-900/5 transition-all group">
+            <div className="flex justify-between items-start mb-8">
+                <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 bg-gray-50 rounded-[24px] flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                        <Store size={32} />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-black text-gray-800 tracking-tight">{pharmacy.pharmacy_name}</h3>
+                        <div className="flex items-center gap-2 text-gray-400 text-xs font-bold mt-1">
+                            <MapPin size={12} className="text-emerald-500" />
+                            <span>{pharmacy.village}</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="px-5 py-2 bg-emerald-50 text-emerald-700 rounded-2xl text-sm font-black flex items-center gap-2 border border-emerald-100">
+                        <Navigation size={14} />
+                        {pharmacy.distance_km} km
+                    </div>
+                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest mr-2">{t.radius}</span>
+                </div>
+            </div>
+
+            <div className="space-y-4">
+                <div className="h-px bg-gray-50 w-full mb-6"></div>
+                
+                <div className="space-y-3">
+                    {pharmacy.items.map((med) => (
+                        <div key={med.id} className="flex flex-col p-4 bg-gray-50/50 rounded-3xl border border-transparent hover:border-emerald-100 transition-all hover:bg-white hover:shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${med.available ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-400'}`}>
+                                        <Pill size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-gray-800 text-sm">{med.name}</p>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${med.available ? 'text-green-500' : 'text-red-400'}`}>
+                                                {med.available ? t.inStock : t.outStock}
+                                            </span>
+                                            {med.available && (
+                                                <span className="text-[9px] font-bold text-gray-400">Qty: {med.stock_count}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-lg font-black text-gray-800 tracking-tight">₹{med.price}</p>
+                                    <p className="text-[9px] font-bold text-gray-300 uppercase">{t.price}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => onFeedback(med)}
+                                className="mt-2 text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 hover:text-emerald-800 transition-colors w-max"
+                            >
+                                <AlertCircle size={10} />
+                                {t.feedbackBtn}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="pt-6 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                         <div className="flex -space-x-2">
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-blue-600">
+                                <Truck size={12} />
+                            </div>
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-purple-100 flex items-center justify-center text-purple-600">
+                                <CheckCircle size={12} />
+                            </div>
+                         </div>
+                         <p className="text-[10px] font-bold text-gray-400 max-w-[120px] leading-tight">Verified by SehatSetu Supply Network</p>
+                    </div>
+                    <button className="px-6 py-3 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-emerald-600 active:scale-95 shadow-lg shadow-gray-200">
+                        Select Store
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
