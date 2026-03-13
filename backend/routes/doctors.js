@@ -5,5 +5,6 @@ const doctorController = require('../controllers/doctorController');
 router.get('/', doctorController.getAll);
 router.get('/available', doctorController.getAvailable);
 router.patch('/:id/toggle', doctorController.toggleAvailability);
+router.patch('/:id/status', doctorController.updateStatus);
 
 module.exports = router;

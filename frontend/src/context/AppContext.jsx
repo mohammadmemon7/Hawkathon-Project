@@ -20,6 +20,13 @@ export function AppProvider({ children }) {
   const [patient, setPatientState] = useState(() => getStoredValue(PATIENT_STORAGE_KEY) || getStoredValue('patient'));
   const [currentDoctor, setCurrentDoctorState] = useState(() => getStoredValue(DOCTOR_STORAGE_KEY));
   const [language, setLanguage] = useState(() => window.localStorage.getItem(LANG_STORAGE_KEY) || 'hi');
+  const [lastAnalysis, setLastAnalysis] = useState(() => getStoredValue('sehatsetu_last_analysis'));
+  const [lowBw, setLowBw] = useState(() => window.localStorage.getItem('sehatsetu_lowbw') === '1');
+  const [selectedDoctor, setSelectedDoctor] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.sessionStorage.getItem('sehatsetu_selected_doctor');
+    return raw ? JSON.parse(raw) : null;
+  });
 
   const setPatient = (nextPatient) => {
     setPatientState(nextPatient);
@@ -77,6 +84,31 @@ export function AppProvider({ children }) {
     }
   }, [currentDoctor]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (lastAnalysis) {
+      window.localStorage.setItem('sehatsetu_last_analysis', JSON.stringify(lastAnalysis));
+    }
+  }, [lastAnalysis]);
+
+  useEffect(() => {
+    window.localStorage.setItem('sehatsetu_lowbw', lowBw ? '1' : '0');
+    if (lowBw) {
+      document.body.classList.add('low-bandwidth');
+    } else {
+      document.body.classList.remove('low-bandwidth');
+    }
+  }, [lowBw]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedDoctor) {
+      window.sessionStorage.setItem('sehatsetu_selected_doctor', JSON.stringify(selectedDoctor));
+    } else {
+      window.sessionStorage.removeItem('sehatsetu_selected_doctor');
+    }
+  }, [selectedDoctor]);
+
   const toggleLanguage = () => {
     setLanguage((prev) => (prev === 'hi' ? 'en' : 'hi'));
   };
@@ -95,6 +127,12 @@ export function AppProvider({ children }) {
         logout,
         language,
         toggleLanguage,
+        lastAnalysis,
+        setLastAnalysis,
+        lowBw,
+        toggleLowBw: () => setLowBw(prev => !prev),
+        selectedDoctor,
+        setSelectedDoctor
       }}
     >
       {children}

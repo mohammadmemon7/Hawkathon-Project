@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function TalkToDoctor() {
-  const { currentPatient, language } = useContext(AppContext);
+  const { currentPatient, language, selectedDoctor, setSelectedDoctor } = useContext(AppContext);
   const [doctors, setDoctors] = useState([]);
   const [myCalls, setMyCalls] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +40,8 @@ export default function TalkToDoctor() {
     waitingMsg: language === 'hi' ? 'डॉक्टर जल्द ही आपके अनुरोध को स्वीकार करेंगे...' : 'Doctor will accept your request soon...',
     readyMsg: language === 'hi' ? 'डॉक्टर तैयार हैं! कृपया नीचे दिए गए कोड का उपयोग करें।' : 'Doctor is ready! Please use the code below.',
     noDoctors: language === 'hi' ? 'फिलहाल कोई डॉक्टर उपलब्ध नहीं है' : 'No doctors available right now',
+    selectedDoctor: language === 'hi' ? 'चुना हुआ डॉक्टर' : 'Selected Doctor',
+    changeDoctor: language === 'hi' ? 'डॉक्टर बदलें' : 'Change Doctor'
   };
 
   const fetchInitialData = useCallback(async () => {
@@ -168,6 +170,53 @@ export default function TalkToDoctor() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+      {/* Selected Doctor Highlight */}
+      {selectedDoctor && (
+        <div className="bg-purple-600 rounded-[32px] p-6 text-white shadow-2xl shadow-purple-200 animate-in zoom-in-95 duration-500 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+               <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-2xl border border-white/30">
+                 {selectedDoctor.name.charAt(0)}
+               </div>
+               <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-white/20 rounded text-[10px] font-black uppercase tracking-widest">{t.selectedDoctor}</span>
+                    <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                  </div>
+                  <h2 className="text-2xl font-black">Dr. {selectedDoctor.name}</h2>
+                  <p className="font-bold opacity-80">{selectedDoctor.specialization}</p>
+               </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={() => handleRequest(selectedDoctor.id, 'audio')}
+                disabled={requesting}
+                className="flex-1 md:flex-none px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl font-black transition-all flex items-center justify-center gap-2"
+              >
+                <Phone size={18} />
+                {t.requestAudio}
+              </button>
+              <button 
+                onClick={() => handleRequest(selectedDoctor.id, 'video')}
+                disabled={requesting}
+                className="flex-1 md:flex-none px-6 py-3 bg-white text-purple-600 rounded-2xl font-black transition-all flex items-center justify-center gap-2 shadow-xl shadow-purple-900/20"
+              >
+                <Video size={18} />
+                {t.requestVideo}
+              </button>
+              <button 
+                onClick={() => setSelectedDoctor(null)}
+                className="p-3 bg-white/10 hover:bg-red-500 hover:text-white border border-white/20 rounded-2xl transition-all"
+                title={t.changeDoctor}
+              >
+                <User size={18} />
+              </button>
+            </div>
           </div>
         </div>
       )}

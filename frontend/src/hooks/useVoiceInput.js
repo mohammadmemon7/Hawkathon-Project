@@ -4,7 +4,7 @@ const SpeechRecognition = typeof window !== 'undefined'
   ? window.SpeechRecognition || window.webkitSpeechRecognition
   : null;
 
-export default function useVoiceInput() {
+export default function useVoiceInput({ language = 'hi' } = {}) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState(null);
@@ -17,8 +17,14 @@ export default function useVoiceInput() {
       return;
     }
 
+    // stop any existing instance
+    if (recognitionRef.current) {
+        recognitionRef.current.stop();
+    }
+
+    setTranscript('');
     const recognition = new SpeechRecognition();
-    recognition.lang = 'hi-IN';
+    recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
     recognition.interimResults = true;
     recognition.continuous = true;
 
@@ -37,19 +43,24 @@ export default function useVoiceInput() {
     };
 
     recognition.onerror = (event) => {
-      setError(event.error);
-      setIsListening(false);
+      // Ignore 'aborted' as it happens on manual stop or language switch
+      if (event.error !== 'aborted') {
+          setError(event.error);
+          setIsListening(false);
+      }
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      // Don't set isListening to false here because if we are restarting 
+      // due to language change, we want to keep the state logically "listening"
+      // However, for typical manual stops, it will be handled by stopListening
     };
 
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
     setError(null);
-  }, []);
+  }, [language]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -58,6 +69,13 @@ export default function useVoiceInput() {
     }
     setIsListening(false);
   }, []);
+
+  // Handle language changes while listening
+  useEffect(() => {
+    if (isListening) {
+        startListening();
+    }
+  }, [language, isListening, startListening]);
 
   useEffect(() => {
     return () => {

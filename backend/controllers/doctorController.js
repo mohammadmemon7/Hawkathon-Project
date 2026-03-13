@@ -42,3 +42,18 @@ exports.toggleAvailability = async (req, res, next) => {
     next(err);
   }
 };
+exports.updateStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['online', 'offline', 'busy'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    db.prepare('UPDATE doctors SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+    const doctor = db.prepare('SELECT * FROM doctors WHERE id = ?').get(req.params.id);
+    if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+    res.json(doctor);
+  } catch (err) {
+    next(err);
+  }
+};

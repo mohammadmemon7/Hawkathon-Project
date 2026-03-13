@@ -21,6 +21,8 @@ const MyRecords = lazy(() => import('./pages/MyRecords'));
 const BookAppointment = lazy(() => import('./pages/BookAppointment'));
 const DoctorAppointments = lazy(() => import('./pages/DoctorAppointments'));
 const MedicineAdmin = lazy(() => import('./pages/MedicineAdmin'));
+const SymptomResult = lazy(() => import('./pages/SymptomResult'));
+const DoctorDirectory = lazy(() => import('./pages/DoctorDirectory'));
 
 function RequirePatient({ children }) {
   const { patient } = useContext(AppContext);
@@ -55,6 +57,8 @@ export default function App() {
             <Route path="/" element={<RequirePatient><DashboardLayout><Home /></DashboardLayout></RequirePatient>} />
             <Route path="/symptoms" element={<RequirePatient><DashboardLayout><SymptomChecker /></DashboardLayout></RequirePatient>} />
             <Route path="/result" element={<RequirePatient><DashboardLayout><TriageResult /></DashboardLayout></RequirePatient>} />
+            <Route path="/symptom-result" element={<RequirePatient><DashboardLayout><SymptomResult /></DashboardLayout></RequirePatient>} />
+            <Route path="/doctors" element={<RequirePatient><DashboardLayout><DoctorDirectory /></DashboardLayout></RequirePatient>} />
             <Route path="/talk" element={<RequirePatient><DashboardLayout><TalkToDoctor /></DashboardLayout></RequirePatient>} />
             <Route path="/book-appointment" element={<RequirePatient><DashboardLayout><BookAppointment /></DashboardLayout></RequirePatient>} />
             <Route path="/consultation/:id" element={<RequirePatient><DashboardLayout><ConsultationDetail /></DashboardLayout></RequirePatient>} />

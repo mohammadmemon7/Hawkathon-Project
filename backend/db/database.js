@@ -23,7 +23,11 @@ db.exec(`
     name TEXT NOT NULL,
     specialization TEXT,
     available INTEGER DEFAULT 1,
-    phone TEXT
+    phone TEXT UNIQUE,
+    experience_years INTEGER DEFAULT 1,
+    rating REAL DEFAULT 4.5,
+    status TEXT DEFAULT 'offline' CHECK(status IN ('online','offline','busy')),
+    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS pharmacies (
@@ -59,9 +63,11 @@ db.exec(`
     prescription TEXT,
     status TEXT DEFAULT 'pending',
     priority_score INTEGER DEFAULT 0,
+    symptom_check_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (patient_id) REFERENCES patients(id),
-    FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id),
+    FOREIGN KEY (symptom_check_id) REFERENCES symptom_checks(id)
   );
 
   CREATE TABLE IF NOT EXISTS medicines (
@@ -112,7 +118,43 @@ db.exec(`
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (doctor_id) REFERENCES doctors(id)
   );
+
+  CREATE TABLE IF NOT EXISTS symptom_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL,
+    symptoms TEXT NOT NULL,
+    possible_condition TEXT,
+    risk_level TEXT CHECK(risk_level IN ('LOW','MEDIUM','HIGH')),
+    recommendation TEXT,
+    explanation TEXT,
+    matched_symptoms TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(id)
+  );
 `);
+
+// Simple migration logic for existing tables
+try {
+  db.prepare("ALTER TABLE doctors ADD COLUMN experience_years INTEGER DEFAULT 1").run();
+} catch (e) {}
+
+try {
+  db.prepare("ALTER TABLE doctors ADD COLUMN rating REAL DEFAULT 4.5").run();
+} catch (e) {}
+
+try {
+  db.prepare("ALTER TABLE doctors ADD COLUMN status TEXT DEFAULT 'offline'").run();
+} catch (e) {}
+
+try {
+  db.prepare("ALTER TABLE doctors ADD COLUMN last_seen DATETIME DEFAULT CURRENT_TIMESTAMP").run();
+} catch (e) {}
+
+try {
+  db.prepare("ALTER TABLE consultations ADD COLUMN symptom_check_id INTEGER").run();
+} catch (e) {
+  // Column likely already exists
+}
 
 console.log('✅ Database ready');
 

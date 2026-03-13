@@ -4,13 +4,13 @@ const { createNotification } = require('../services/notificationService');
 
 exports.create = async (req, res, next) => {
   try {
-    const { patient_id, symptoms, doctor_id } = req.body;
+    const { patient_id, symptoms, doctor_id, symptom_check_id } = req.body;
 
     const aiResult = await aiService.analyzeSymptoms(symptoms);
 
     const result = db.prepare(
-      `INSERT INTO consultations (patient_id, symptoms, ai_triage_level, ai_explanation, ai_action, ai_remedies, ai_warning, doctor_id, priority_score)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO consultations (patient_id, symptoms, ai_triage_level, ai_explanation, ai_action, ai_remedies, ai_warning, doctor_id, priority_score, symptom_check_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       patient_id,
       symptoms,
@@ -20,7 +20,8 @@ exports.create = async (req, res, next) => {
       aiResult.home_remedies ? JSON.stringify(aiResult.home_remedies) : null,
       aiResult.warning_signs,
       doctor_id || null,
-      aiResult.priority_score || 0
+      aiResult.priority_score || 0,
+      symptom_check_id || null
     );
 
     const consultation = db.prepare('SELECT * FROM consultations WHERE id = ?').get(result.lastInsertRowid);

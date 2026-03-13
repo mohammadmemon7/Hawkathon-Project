@@ -15,12 +15,12 @@ import {
 } from 'lucide-react';
 
 export default function BookAppointment() {
-  const { currentPatient, language } = useContext(AppContext);
+  const { currentPatient, language, selectedDoctor: preSelectedDoctor } = useContext(AppContext);
   const navigate = useNavigate();
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState(1);
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [step, setStep] = useState(preSelectedDoctor ? 2 : 1);
+  const [chosenDoctor, setChosenDoctor] = useState(preSelectedDoctor || null);
   const [formData, setFormData] = useState({
     date: '',
     time: '',
@@ -58,7 +58,7 @@ export default function BookAppointment() {
     try {
       await createAppointment({
         patient_id: currentPatient.id,
-        doctor_id: selectedDoctor.id,
+        doctor_id: chosenDoctor.id,
         appointment_date: formData.date,
         appointment_time: formData.time,
         reason: formData.reason
@@ -91,7 +91,7 @@ export default function BookAppointment() {
             {doctors.map((doc) => (
               <button 
                 key={doc.id}
-                onClick={() => { setSelectedDoctor(doc); setStep(2); }}
+                onClick={() => { setChosenDoctor(doc); setStep(2); }}
                 className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left group"
               >
                 <div className="flex items-center gap-4">
@@ -117,7 +117,7 @@ export default function BookAppointment() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-teal-600 uppercase tracking-[0.2em]">Booking with</p>
-              <h3 className="font-black text-gray-800">Dr. {selectedDoctor.name}</h3>
+              <h3 className="font-black text-gray-800">Dr. {chosenDoctor.name}</h3>
             </div>
           </div>
 
@@ -182,8 +182,8 @@ export default function BookAppointment() {
             <h2 className="text-2xl font-black text-gray-800 mb-2">{t.success}</h2>
             <p className="text-gray-500 font-medium">
               {language === 'hi' 
-              ? `आपका अपॉइंटमेंट Dr. ${selectedDoctor.name} के साथ ${formData.date} को ${formData.time} बजे बुक हो गया है।` 
-              : `Your appointment with Dr. ${selectedDoctor.name} is confirmed for ${formData.date} at ${formData.time}.`}
+              ? `आपका अपॉइंटमेंट Dr. ${chosenDoctor.name} के साथ ${formData.date} को ${formData.time} बजे बुक हो गया है।` 
+              : `Your appointment with Dr. ${chosenDoctor.name} is confirmed for ${formData.date} at ${formData.time}.`}
             </p>
           </div>
           <button 

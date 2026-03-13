@@ -1,42 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useContext } from 'react';
 import { Wifi, WifiOff } from 'lucide-react';
-
-const STORAGE_KEY = 'lowBandwidth';
+import { AppContext } from '../context/AppContext';
 
 export default function LowBandwidthToggle() {
-  const [enabled, setEnabled] = useState(() => {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  });
-
-  useEffect(() => {
-    if (enabled) {
-      document.body.classList.add('low-bandwidth');
-      localStorage.setItem(STORAGE_KEY, '1');
-    } else {
-      document.body.classList.remove('low-bandwidth');
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [enabled]);
-
-  // Apply on mount if already saved
-  useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) === '1') {
-      document.body.classList.add('low-bandwidth');
-    }
-  }, []);
+  const { lowBw, toggleLowBw } = useContext(AppContext);
 
   return (
     <button
-      onClick={() => setEnabled((prev) => !prev)}
-      title={enabled ? 'Low-bandwidth mode ON — click to disable' : 'Enable low-bandwidth mode'}
-      className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-        enabled
-          ? 'bg-amber-100 border-amber-400 text-amber-700'
-          : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
+      onClick={toggleLowBw}
+      type="button"
+      title={lowBw ? 'Low-bandwidth mode ON — click to disable' : 'Enable low-bandwidth mode'}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+        lowBw
+          ? 'bg-amber-100 border-amber-400 text-amber-700 shadow-none'
+          : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 shadow-sm'
       }`}
     >
-      {enabled ? <WifiOff size={14} /> : <Wifi size={14} />}
-      {enabled ? 'Low BW' : 'Low BW'}
+      {lowBw ? <WifiOff size={14} /> : <Wifi size={14} />}
+      <span>{lowBw ? 'Low BW' : 'Optimized'}</span>
     </button>
   );
 }

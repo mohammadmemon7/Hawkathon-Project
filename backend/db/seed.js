@@ -78,26 +78,26 @@ const medicines = [
 function upsertDoctors() {
   const findDoctor = db.prepare('SELECT id FROM doctors WHERE phone = ?');
   const insertDoctor = db.prepare(
-    'INSERT INTO doctors (name, specialization, available, phone) VALUES (?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO doctors (name, specialization, available, phone, experience_years, rating, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
   const updateDoctor = db.prepare(
-    'UPDATE doctors SET name = ?, specialization = ?, available = ? WHERE id = ?'
+    'UPDATE doctors SET name = ?, specialization = ?, available = ?, experience_years = ?, rating = ?, status = ? WHERE id = ?'
   );
 
   const transaction = db.transaction((rows) => {
-    for (const [name, specialization, available, phone] of rows) {
+    for (const [name, specialization, available, phone, exp, rating, status] of rows) {
       const existing = findDoctor.get(phone);
       if (existing) {
-        updateDoctor.run(name, specialization, available, existing.id);
+        updateDoctor.run(name, specialization, available, exp, rating, status, existing.id);
       } else {
-        insertDoctor.run(name, specialization, available, phone);
+        insertDoctor.run(name, specialization, available, phone, exp, rating, status);
       }
     }
   });
 
   transaction(doctors);
 
-  const seededPhones = doctors.map(([, , , phone]) => phone);
+  const seededPhones = doctors.map((d) => d[3]);
   const placeholders = seededPhones.map(() => '?').join(', ');
   db.prepare(
     `DELETE FROM doctors

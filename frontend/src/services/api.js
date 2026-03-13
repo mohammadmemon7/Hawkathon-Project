@@ -275,3 +275,30 @@ export async function toggleDoctorAvailability(id) {
     throw err.response?.data || err;
   }
 }
+
+export async function getDoctorDirectory(params) {
+  try {
+    const res = await withRetry(() => api.get('/doctor-directory', { params }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function updateDoctorStatus(id, status) {
+  try {
+    const res = await withRetry(() => api.patch(`/doctors/${id}/status`, { status }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function analyzeSymptomsLite(data) {
+  try {
+    const res = await withRetry(() => api.post('/symptom-checker/analyze', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}

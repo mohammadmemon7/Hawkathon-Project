@@ -10,7 +10,8 @@ import {
   X, 
   Activity,
   ChevronRight,
-  CalendarDays
+  CalendarDays,
+  Users
 } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 
@@ -24,6 +25,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     { name: language === 'hi' ? 'होम' : 'Home', path: '/', icon: <Home size={22} /> },
     { name: language === 'hi' ? 'लक्षण जांचें' : 'Check Symptoms', path: '/symptoms', icon: <Stethoscope size={22} /> },
     { name: language === 'hi' ? 'डॉक्टर से बात करें' : 'Talk to Doctor', path: '/talk', icon: <Video size={22} /> },
+    { name: language === 'hi' ? 'डॉक्टरों की सूची' : 'Doctors', path: '/doctors', icon: <Users size={22} /> },
     { name: language === 'hi' ? 'मेरे रिकॉर्ड' : 'My Records', path: '/records', icon: <FileText size={22} /> },
     { name: language === 'hi' ? 'अपॉइंटमेंट' : 'Appointments', path: '/book-appointment', icon: <CalendarDays size={22} /> },
     { name: language === 'hi' ? 'फार्मेसी' : 'Pharmacy', path: '/medicines', icon: <Pill size={22} /> },
