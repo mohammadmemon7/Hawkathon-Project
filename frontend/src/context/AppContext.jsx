@@ -8,7 +8,7 @@ function getStoredPatient() {
   if (typeof window === 'undefined') return null;
 
   try {
-    const rawPatient = window.localStorage.getItem(PATIENT_STORAGE_KEY);
+    const rawPatient = window.localStorage.getItem(PATIENT_STORAGE_KEY) || window.localStorage.getItem('patient');
     return rawPatient ? JSON.parse(rawPatient) : null;
   } catch {
     return null;
@@ -27,6 +27,7 @@ export function AppProvider({ children }) {
   const logout = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(PATIENT_STORAGE_KEY);
+      window.localStorage.removeItem('patient');
     }
     setPatientState(null);
     setCurrentDoctor(null);
@@ -41,8 +42,11 @@ export function AppProvider({ children }) {
 
     if (patient) {
       window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient));
+      // Also keep 'patient' for compatibility if needed
+      window.localStorage.setItem('patient', JSON.stringify(patient));
     } else {
       window.localStorage.removeItem(PATIENT_STORAGE_KEY);
+      window.localStorage.removeItem('patient');
     }
   }, [patient]);
 

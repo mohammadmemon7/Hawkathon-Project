@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 10000,
 });
 
@@ -12,9 +12,21 @@ async function withRetry(requestFn) {
     // Retry once on network errors or 5xx responses
     const isNetworkError = !err.response;
     const isServerError = err.response?.status >= 500;
+      
     if (isNetworkError || isServerError) {
-      return await requestFn();
+      console.warn("Network error encountered on request, retrying in 2 seconds...");
+      return new Promise((resolve, reject) => {
+         setTimeout(async () => {
+             try {
+                 const result = await requestFn();
+                 resolve(result);
+             } catch (retryErr) {
+                 reject(retryErr);
+             }
+         }, 2000);
+      });
     }
+      
     throw err;
   }
 }
@@ -168,6 +180,24 @@ export async function getNotifications(userId, userType) {
 export async function markNotificationRead(id) {
   try {
     const res = await withRetry(() => api.patch(`/notifications/${id}/read`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function requestCall(data) {
+  try {
+    const res = await withRetry(() => api.post('/calls/request', data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function cancelCall(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/calls/${id}/cancel`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;

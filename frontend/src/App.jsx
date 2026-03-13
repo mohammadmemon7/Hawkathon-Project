@@ -1,10 +1,8 @@
-import { lazy, Suspense, useContext, useState } from 'react';
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
-import { AppProvider } from './context/AppContext';
-import { AppContext } from './context/AppContext';
+import { lazy, Suspense, useContext } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AppProvider, AppContext } from './context/AppContext';
 import OfflineBanner from './components/OfflineBanner';
-import Sidebar from './components/Sidebar';
-import TopHeader from './components/TopHeader';
+import DashboardLayout from './components/DashboardLayout';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -31,39 +29,30 @@ function RequirePatient({ children }) {
 }
 
 export default function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   return (
     <AppProvider>
       <OfflineBanner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <div className="flex h-screen bg-gray-50 overflow-hidden text-[var(--text)]">
-          <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-          
-          <div className="flex-1 flex flex-col h-screen overflow-hidden">
-            <TopHeader onMenuClick={() => setIsSidebarOpen(true)} />
-            
-            <main className="flex-1 overflow-y-auto bg-gray-50/30">
-              <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<RequirePatient><Home /></RequirePatient>} />
-                <Route path="/login" element={<PatientLogin />} />
-                <Route path="/register" element={<PatientRegister />} />
-                <Route path="/symptoms" element={<RequirePatient><SymptomChecker /></RequirePatient>} />
-                <Route path="/result" element={<RequirePatient><TriageResult /></RequirePatient>} />
-                <Route path="/doctor-login" element={<DoctorLogin />} />
-                <Route path="/dashboard" element={<DoctorDashboard />} />
-                <Route path="/talk" element={<RequirePatient><TalkToDoctor /></RequirePatient>} />
-                <Route path="/book-appointment" element={<RequirePatient><BookAppointment /></RequirePatient>} />
-                <Route path="/consultation/:id" element={<ConsultationDetail />} />
-                <Route path="/medicines" element={<RequirePatient><MedicineFinder /></RequirePatient>} />
-                <Route path="/profile/:id" element={<RequirePatient><PatientProfile /></RequirePatient>} />
-                <Route path="/records" element={<RequirePatient><MyRecords /></RequirePatient>} />
-              </Routes>
-              </Suspense>
-            </main>
-          </div>
-        </div>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* Public/Auth Routes without Dashboard Layout */}
+            <Route path="/register" element={<PatientRegister />} />
+            <Route path="/login" element={<PatientLogin />} />
+            <Route path="/doctor-login" element={<DoctorLogin />} />
+            <Route path="/dashboard" element={<DoctorDashboard />} />
+
+            {/* Patient Routes with Dashboard Layout */}
+            <Route path="/" element={<RequirePatient><DashboardLayout><Home /></DashboardLayout></RequirePatient>} />
+            <Route path="/symptoms" element={<RequirePatient><DashboardLayout><SymptomChecker /></DashboardLayout></RequirePatient>} />
+            <Route path="/result" element={<RequirePatient><DashboardLayout><TriageResult /></DashboardLayout></RequirePatient>} />
+            <Route path="/talk" element={<RequirePatient><DashboardLayout><TalkToDoctor /></DashboardLayout></RequirePatient>} />
+            <Route path="/book-appointment" element={<RequirePatient><DashboardLayout><BookAppointment /></DashboardLayout></RequirePatient>} />
+            <Route path="/consultation/:id" element={<RequirePatient><DashboardLayout><ConsultationDetail /></DashboardLayout></RequirePatient>} />
+            <Route path="/medicines" element={<RequirePatient><DashboardLayout><MedicineFinder /></DashboardLayout></RequirePatient>} />
+            <Route path="/profile/:id" element={<RequirePatient><DashboardLayout><PatientProfile /></DashboardLayout></RequirePatient>} />
+            <Route path="/records" element={<RequirePatient><DashboardLayout><MyRecords /></DashboardLayout></RequirePatient>} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AppProvider>
   );

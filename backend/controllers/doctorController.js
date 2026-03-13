@@ -2,6 +2,14 @@ const db = require('../db/database');
 
 exports.getAll = async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'public, max-age=60'); // 1 minute caching for doctor list
+
+    // Backward compatibility: If no page parameter is sent, return raw array.
+    if (!req.query.page) {
+      const doctors = db.prepare('SELECT * FROM doctors').all();
+      return res.json(doctors);
+    }
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;

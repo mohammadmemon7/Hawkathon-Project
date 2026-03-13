@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Activity, Video, ClipboardList, Pill, CalendarDays, LogOut, X } from 'lucide-react';
+import { Home, Stethoscope, Video, FileText, Pill, LogOut, X, Activity } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 
 export default function Sidebar({ isOpen, setIsOpen }) {
@@ -10,12 +10,17 @@ export default function Sidebar({ isOpen, setIsOpen }) {
 
   const navItems = [
     { name: language === 'hi' ? 'होम' : 'Home', path: '/', icon: <Home size={20} /> },
-    { name: language === 'hi' ? 'लक्षण जांचें' : 'Check Symptoms', path: '/symptoms', icon: <Activity size={20} /> },
+    { name: language === 'hi' ? 'लक्षण जांचें' : 'Check Symptoms', path: '/symptoms', icon: <Stethoscope size={20} /> },
     { name: language === 'hi' ? 'डॉक्टर से बात करें' : 'Talk to Doctor', path: '/talk', icon: <Video size={20} /> },
-    { name: language === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Book Appointment', path: '/book-appointment', icon: <CalendarDays size={20} /> },
-    { name: language === 'hi' ? 'मेरे रिकॉर्ड' : 'My Records', path: '/records', icon: <ClipboardList size={20} /> },
+    { name: language === 'hi' ? 'मेरे रिकॉर्ड' : 'My Records', path: '/records', icon: <FileText size={20} /> },
     { name: language === 'hi' ? 'फार्मेसी' : 'Pharmacy', path: '/medicines', icon: <Pill size={20} /> },
   ];
+
+  const handleLogout = () => {
+    setIsOpen(false);
+    logout();
+    navigate('/login');
+  };
 
   return (
     <>
@@ -29,7 +34,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       
       {/* Sidebar */}
       <aside 
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-[2px_0_12px_rgba(0,0,0,0.04)] border-r border-gray-100 flex flex-col transform transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`fixed md:static inset-y-0 left-0 z-50 w-[240px] bg-white shadow-[2px_0_12px_rgba(0,0,0,0.04)] border-r border-gray-100 flex flex-col transform transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -72,11 +77,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
         <div className="p-4 border-t border-gray-100 bg-gray-50/50 mt-auto">
           <button 
             className="flex items-center gap-3 px-4 py-2.5 w-full rounded-xl text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors font-medium group"
-            onClick={() => {
-              logout();
-              setIsOpen(false);
-              navigate('/login');
-            }}
+            onClick={handleLogout}
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
             <span>{language === 'hi' ? 'लॉग आउट' : 'Log Out'}</span>

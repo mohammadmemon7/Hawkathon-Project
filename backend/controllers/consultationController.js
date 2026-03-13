@@ -52,6 +52,18 @@ exports.create = async (req, res, next) => {
 
 exports.getPending = async (req, res, next) => {
   try {
+    // Backward compatibility: If no page parameter, return a raw array matching legacy schema.
+    if (!req.query.page) {
+      const consultations = db.prepare(
+         `SELECT c.*, p.name AS patient_name, p.village AS patient_village
+          FROM consultations c
+          JOIN patients p ON c.patient_id = p.id
+          WHERE c.status != 'completed'
+          ORDER BY c.priority_score DESC, c.created_at ASC`
+      ).all();
+      return res.json(consultations);
+    }
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;

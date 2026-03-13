@@ -1,109 +1,88 @@
 const db = require('../db/database');
-const { createNotification } = require('../services/notificationService');
 
-exports.create = async (req, res, next) => {
+exports.create = (req, res) => {
+  const { patient_id, doctor_id, appointment_date, appointment_time, reason } = req.body;
+
+  if (!patient_id || !doctor_id || !appointment_date || !appointment_time) {
+    return res.status(400).json({ error: 'Missing required appointment fields' });
+  }
+
   try {
-    const { patient_id, doctor_id, appointment_date, appointment_time, notes } = req.body;
+    const stmt = db.prepare(`
+      INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, status)
+      VALUES (?, ?, ?, ?, ?, 'scheduled')
+    `);
+    
+    const info = stmt.run(patient_id, doctor_id, appointment_date, appointment_time, reason || null);
 
-    if (!patient_id || !doctor_id || !appointment_date || !appointment_time) {
-      return res.status(400).json({ error: 'patient_id, doctor_id, appointment_date and appointment_time are required' });
-    }
-
-    const patient = db.prepare('SELECT id FROM patients WHERE id = ?').get(patient_id);
-    if (!patient) {
-      return res.status(404).json({ error: 'Patient not found' });
-    }
-
-    const doctor = db.prepare('SELECT id FROM doctors WHERE id = ?').get(doctor_id);
-    if (!doctor) {
-      return res.status(404).json({ error: 'Doctor not found' });
-    }
-
-    const result = db.prepare(
-      `INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, notes)
-       VALUES (?, ?, ?, ?, 'scheduled', ?)`
-    ).run(patient_id, doctor_id, appointment_date, appointment_time, notes || '');
-
-    const appointment = db.prepare(
-      `SELECT a.*, p.name AS patient_name, d.name AS doctor_name, d.specialization AS doctor_specialization
-       FROM appointments a
-       JOIN patients p ON a.patient_id = p.id
-       JOIN doctors d ON a.doctor_id = d.id
-       WHERE a.id = ?`
-    ).get(result.lastInsertRowid);
-
-    createNotification({
-      userId: patient_id,
-      userType: 'patient',
-      title: 'Appointment scheduled',
-      message: `Your appointment with ${appointment.doctor_name} is scheduled for ${appointment.appointment_date} at ${appointment.appointment_time}.`,
+    res.status(201).json({
+      id: info.lastInsertRowid,
+      patient_id,
+      doctor_id,
+      appointment_date,
+      appointment_time,
+      reason,
+      status: 'scheduled'
     });
-
-    createNotification({
-      userId: doctor_id,
-      userType: 'doctor',
-      title: 'New appointment booked',
-      message: `${appointment.patient_name} booked an appointment for ${appointment.appointment_date} at ${appointment.appointment_time}.`,
-    });
-
-    res.status(201).json(appointment);
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error creating appointment:', error);
+    res.status(500).json({ error: 'Failed to create appointment' });
   }
 };
 
-exports.getByPatient = async (req, res, next) => {
+exports.getByPatient = (req, res) => {
   try {
-    const appointments = db.prepare(
-      `SELECT a.*, d.name AS doctor_name, d.specialization AS doctor_specialization
-       FROM appointments a
-       JOIN doctors d ON a.doctor_id = d.id
-       WHERE a.patient_id = ?
-       ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.created_at DESC`
-    ).all(req.params.id);
-
+    const stmt = db.prepare(`
+      SELECT a.*, d.name as doctor_name, d.specialization
+      FROM appointments a
+      JOIN doctors d ON a.doctor_id = d.id
+      WHERE a.patient_id = ?
+      ORDER BY a.appointment_date DESC, a.appointment_time DESC
+    `);
+    
+    const appointments = stmt.all(req.params.id);
     res.json(appointments);
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error fetching patient appointments:', error);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
   }
 };
 
-exports.getByDoctor = async (req, res, next) => {
+exports.getByDoctor = (req, res) => {
   try {
-    const appointments = db.prepare(
-      `SELECT a.*, p.name AS patient_name, p.phone AS patient_phone, p.village AS patient_village
-       FROM appointments a
-       JOIN patients p ON a.patient_id = p.id
-       WHERE a.doctor_id = ?
-       ORDER BY a.appointment_date ASC, a.appointment_time ASC, a.created_at DESC`
-    ).all(req.params.id);
-
+    const stmt = db.prepare(`
+      SELECT a.*, p.name as patient_name, p.gender, p.age, p.phone
+      FROM appointments a
+      JOIN patients p ON a.patient_id = p.id
+      WHERE a.doctor_id = ?
+      ORDER BY a.appointment_date ASC, a.appointment_time ASC
+    `);
+    
+    const appointments = stmt.all(req.params.id);
     res.json(appointments);
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error fetching doctor appointments:', error);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
   }
 };
 
-exports.cancel = async (req, res, next) => {
+exports.cancel = (req, res) => {
   try {
-    const appointment = db.prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
-
-    if (!appointment) {
+    const stmt = db.prepare(`
+      UPDATE appointments 
+      SET status = 'cancelled' 
+      WHERE id = ?
+    `);
+    
+    const info = stmt.run(req.params.id);
+    
+    if (info.changes === 0) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
-
-    db.prepare("UPDATE appointments SET status = 'cancelled' WHERE id = ?").run(req.params.id);
-
-    const updatedAppointment = db.prepare(
-      `SELECT a.*, p.name AS patient_name, d.name AS doctor_name, d.specialization AS doctor_specialization
-       FROM appointments a
-       JOIN patients p ON a.patient_id = p.id
-       JOIN doctors d ON a.doctor_id = d.id
-       WHERE a.id = ?`
-    ).get(req.params.id);
-
-    res.json(updatedAppointment);
-  } catch (err) {
-    next(err);
+    
+    res.json({ message: 'Appointment cancelled successfully', id: req.params.id });
+  } catch (error) {
+    console.error('Error cancelling appointment:', error);
+    res.status(500).json({ error: 'Failed to cancel appointment' });
   }
 };
