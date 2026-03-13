@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { getAvailableDoctors } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
+import AuthLanguageToggle from '../components/AuthLanguageToggle';
 
 export default function DoctorLogin() {
-  const { setCurrentDoctor } = useContext(AppContext);
+  const { setCurrentDoctor, language, toggleLanguage } = useContext(AppContext);
   const navigate = useNavigate();
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,18 +30,31 @@ export default function DoctorLogin() {
     navigate('/dashboard');
   };
 
+  const t = {
+    title: language === 'hi' ? 'डॉक्टर लॉगिन' : 'Doctor Login',
+    subtitle: language === 'hi' ? 'आप कौन हैं?' : 'Who are you?',
+    noDoctors: language === 'hi' ? 'कोई उपलब्ध डॉक्टर नहीं है' : 'No available doctors at the moment.',
+    available: language === 'hi' ? 'उपलब्ध' : 'Available',
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-gray-50 px-4 py-6">
-      <h1 className="text-xl font-bold" style={{ color: 'var(--primary)' }}>Doctor Login</h1>
-      <p className="mb-6" style={{ color: 'var(--muted)' }}>Aap kaun hain?</p>
-
-      {doctors.length === 0 ? (
-        <div className="text-center py-16">
-          <p style={{ color: 'var(--muted)' }}>Koi available doctor nahi hai abhi</p>
+    <div className="min-h-[calc(100vh-51px)] bg-gray-50 px-4 py-8 md:px-8 flex flex-col justify-center">
+      <div className="mx-auto w-full max-w-md bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 relative">
+        <div className="absolute top-6 right-6">
+          <AuthLanguageToggle language={language} toggleLanguage={toggleLanguage} />
         </div>
-      ) : (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">{t.title}</h1>
+          <p className="text-sm text-gray-500">{t.subtitle}</p>
+        </div>
+
+        {doctors.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">{t.noDoctors}</p>
+          </div>
+        ) : (
         <div className="space-y-3">
           {doctors.map((doc) => (
             <button
@@ -53,14 +67,15 @@ export default function DoctorLogin() {
                   <h3 className="font-semibold text-base">{doc.name}</h3>
                   <p className="text-sm" style={{ color: 'var(--muted)' }}>{doc.specialization}</p>
                 </div>
-                <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
-                  Available
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 uppercase tracking-wider">
+                  {t.available}
                 </span>
               </div>
             </button>
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,271 +1,244 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { Video, Phone, PhoneOff, Mic, MicOff, User, Activity } from 'lucide-react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
-import { getAvailableDoctors, requestCall, cancelCall } from '../services/api';
+import { getAvailableDoctors, requestCall, getPatientCalls } from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { 
+  Video, 
+  Phone, 
+  MessageSquare, 
+  User, 
+  Search, 
+  CheckCircle2, 
+  Clock, 
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  ChevronRight,
+  Info
+} from 'lucide-react';
 
 export default function TalkToDoctor() {
-  const { currentPatient } = useContext(AppContext);
+  const { currentPatient, language } = useContext(AppContext);
   const [doctors, setDoctors] = useState([]);
+  const [myCalls, setMyCalls] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Call States
-  const [callStatus, setCallStatus] = useState('idle'); // idle | connecting | active
-  const [activeDoctor, setActiveDoctor] = useState(null);
-  const [callType, setCallType] = useState(null); // video | voice
-  const [currentCallId, setCurrentCallId] = useState(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
+  const [requesting, setRequesting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const patientId = currentPatient?.id || 'PT-8932'; // Fallback if no user exists
+  const t = {
+    title: language === 'hi' ? 'डॉक्टर से बात करें' : 'Talk to Doctor',
+    subtitle: language === 'hi' ? 'वीडियो या ऑडियो कॉल के लिए अनुरोध करें' : 'Request for a Video or Audio call',
+    availableDoctors: language === 'hi' ? 'उपलब्ध डॉक्टर' : 'Available Doctors',
+    waitingRoom: language === 'hi' ? 'प्रतीक्षा कक्ष (Waiting Room)' : 'Your Waiting Room',
+    requestAudio: language === 'hi' ? 'ऑडियो कॉल' : 'Audio Call',
+    requestVideo: language === 'hi' ? 'वीडियो कॉल' : 'Video Call',
+    pending: language === 'hi' ? 'लंबित' : 'Pending',
+    accepted: language === 'hi' ? 'स्वीकार्य' : 'Accepted',
+    completed: language === 'hi' ? 'पूर्ण' : 'Completed',
+    meetingCode: language === 'hi' ? 'मीटिंग कोड' : 'Meeting Code',
+    copyCode: language === 'hi' ? 'कोड कॉपी करें' : 'Copy Code',
+    waitingMsg: language === 'hi' ? 'डॉक्टर जल्द ही आपके अनुरोध को स्वीकार करेंगे...' : 'Doctor will accept your request soon...',
+    readyMsg: language === 'hi' ? 'डॉक्टर तैयार हैं! कृपया नीचे दिए गए कोड का उपयोग करें।' : 'Doctor is ready! Please use the code below.',
+    noDoctors: language === 'hi' ? 'फिलहाल कोई डॉक्टर उपलब्ध नहीं है' : 'No doctors available right now',
+  };
 
-  useEffect(() => {
-    fetchDoctors();
-  }, []);
-
-  useEffect(() => {
-    let timer;
-    if (callStatus === 'active') {
-      timer = setInterval(() => setCallDuration((prev) => prev + 1), 1000);
-    }
-    return () => clearInterval(timer);
-  }, [callStatus]);
-
-  const fetchDoctors = async () => {
+  const fetchInitialData = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await getAvailableDoctors();
-      setDoctors(data);
-    } catch (error) {
-      console.error('Failed to fetch available doctors', error);
-      // Optional: Handle error states here
+      const [docs, calls] = await Promise.all([
+        getAvailableDoctors(),
+        getPatientCalls(currentPatient.id)
+      ]);
+      setDoctors(docs);
+      setMyCalls(calls);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPatient?.id]);
 
-  const initiateCall = async (doctor, type) => {
-    setActiveDoctor(doctor);
-    setCallType(type);
-    setCallStatus('connecting');
+  useEffect(() => {
+    fetchInitialData();
+    // Poll for status updates every 5 seconds
+    const interval = setInterval(() => {
+        getPatientCalls(currentPatient.id).then(setMyCalls).catch(console.error);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchInitialData, currentPatient?.id]);
 
+  const handleRequest = async (docId, mode) => {
+    setRequesting(true);
     try {
-      // Create request payload
-      const payload = {
-        patient_id: patientId,
-        doctor_id: doctor.id || doctor._id,
-        call_type: type,
-      };
-
-      const res = await requestCall(payload);
-      setCurrentCallId(res.id || res._id); // store call ID from backend
-
-      // Simulate the other party answering the call after 3 seconds
-      setTimeout(() => {
-        // In a real WebRTC app we would only set this active when accepted.
-        // For hackathon prototype, auto-connect after 3 seconds:
-        if (callStatus !== 'idle') { // check if not cancelled during those 3s
-           setCallStatus('active');
-        }
-      }, 3000);
-
-    } catch (error) {
-      console.error('Call request failed', error);
-      alert('Network Issue. Call failed.');
-      endCallLocally();
+      await requestCall({
+        patient_id: currentPatient.id,
+        doctor_id: docId,
+        mode,
+        notes: ''
+      });
+      fetchInitialData();
+    } catch (err) {
+      alert(language === 'hi' ? 'अनुरोध विफल रहा' : 'Request failed');
+    } finally {
+      setRequesting(false);
     }
   };
 
-  const cancelActiveCall = async () => {
-    if (currentCallId) {
-      try {
-        await cancelCall(currentCallId);
-      } catch (err) {
-        console.error('Failed to cancel call securely', err);
-      }
-    }
-    endCallLocally();
-  };
+  const filteredDoctors = doctors.filter(d => 
+    d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    d.specialization.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const endCallLocally = () => {
-    setCallStatus('idle');
-    setActiveDoctor(null);
-    setCallType(null);
-    setCurrentCallId(null);
-    setCallDuration(0);
-    setIsMuted(false);
-  };
+  if (loading) return <LoadingSpinner />;
 
-  const toggleMute = () => setIsMuted(!isMuted);
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  // -------------------------
-  // RENDER: Connecting Screen
-  // -------------------------
-  if (callStatus === 'connecting') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] p-6 text-center">
-        <div className="relative mb-8 mt-12">
-          {/* Animated Pulsing Ring */}
-          <div className="absolute inset-0 bg-teal-500 rounded-full animate-ping opacity-30 scale-150"></div>
-          {/* Circle Avatar */}
-          <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center relative z-10 shadow-xl border-4 border-teal-100">
-            <User size={48} className="text-teal-600" />
-            <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
-          </div>
-        </div>
-        
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Connecting...</h2>
-        <p className="text-gray-500 font-medium mb-6">
-          Aapka call <span className="text-teal-600 font-bold">{activeDoctor?.name}</span> ko bheja gaya hai...
-        </p>
-        
-        <p className="text-sm font-semibold text-gray-400 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
-          {activeDoctor?.specialization}
-        </p>
-
-        <button 
-          onClick={cancelActiveCall}
-          className="mt-16 bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white px-8 py-3 rounded-full font-bold flex items-center gap-2 transition-all shadow-sm"
-        >
-          <PhoneOff size={20} />
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  // -------------------------
-  // RENDER: Active Call Screen
-  // -------------------------
-  if (callStatus === 'active') {
-    return (
-      <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-900 text-white relative">
-        <div className="flex-1 relative flex flex-col items-center justify-center p-6">
-          
-          {/* Top Left: Timer logic */}
-          <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 px-3 py-1.5 rounded-full border border-gray-700">
-            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
-            <span className="font-mono text-sm font-semibold tracking-widest">{formatTime(callDuration)}</span>
-          </div>
-
-          {/* Main Visual Node (Doctor avatar focus) */}
-          <div className="w-32 h-32 md:w-48 md:h-48 rounded-full bg-gray-800 flex items-center justify-center mb-6 shadow-2xl border-4 border-gray-700 relative">
-             <User size={64} className="text-gray-500" />
-             {isMuted && (
-                <div className="absolute -bottom-2 right-4 bg-red-500 rounded-full p-2 border-2 border-gray-800">
-                  <MicOff size={16} className="text-white" />
-                </div>
-             )}
-          </div>
-          <h2 className="text-2xl md:text-3xl font-bold mb-1 tracking-wide">{activeDoctor?.name}</h2>
-          <p className="text-gray-400 font-medium tracking-wider text-sm">{activeDoctor?.specialization}</p>
-
-          {/* Picture in Picture (You) -> Only if Video Call */}
-          {callType === 'video' && (
-             <div className="absolute bottom-6 right-6 w-28 h-36 md:w-40 md:h-56 bg-gray-800 rounded-xl overflow-hidden shadow-2xl border-2 border-gray-600 flex items-center justify-center">
-               <User size={40} className="text-gray-600" />
-               <div className="absolute bottom-2 left-2 text-xs font-semibold bg-black/60 px-2 py-1 rounded text-gray-200 backdrop-blur-sm">You</div>
-             </div>
-          )}
-        </div>
-
-        {/* Lower Call Handle Actions */}
-        <div className="h-28 bg-gray-800/80 backdrop-blur-lg border-t border-gray-700/50 flex items-center justify-center gap-6 md:gap-10 px-4">
-          <button 
-            onClick={toggleMute}
-            className={`p-4 md:p-5 rounded-full transition-all ${isMuted ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-gray-700 hover:bg-gray-600 border border-transparent text-white'}`}
-          >
-            {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-          </button>
-
-          {callType === 'video' && (
-            <button className="p-4 md:p-5 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-all">
-               <Video size={24} />
-            </button>
-          )}
-          
-          <button 
-            onClick={() => {
-              // Hackathon simple hang up
-              endCallLocally();
-            }}
-            className="p-5 md:p-6 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg shadow-red-600/30 transform hover:scale-110 transition-all flex items-center justify-center"
-          >
-            <PhoneOff size={28} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // -------------------------
-  // RENDER: Default Directory View
-  // -------------------------
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Available Doctors</h1>
-        <p className="text-gray-500">Connect instantly via secure video or voice consultation.</p>
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-4">
-          <Activity className="animate-spin text-teal-500" size={36} />
-          <p className="font-medium">Finding available doctors...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {doctors.map((doctor) => (
-            <div key={doctor.id || doctor._id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-teal-100 transition-all group">
-              <div className="flex items-start gap-4 mb-6 relative">
-                <div className="relative">
-                  <div className="w-14 h-14 bg-teal-50 rounded-full flex items-center justify-center text-teal-600 font-bold text-xl border border-teal-100 group-hover:bg-teal-100 transition-colors">
-                    {doctor.name.charAt(4) || doctor.name.charAt(0)}
-                  </div>
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
-                </div>
-                
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg text-gray-800 leading-tight mb-1">{doctor.name}</h3>
-                  <p className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2 py-1 rounded inline-block uppercase tracking-wider">
-                    {doctor.specialization}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => initiateCall(doctor, 'video')}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[var(--primary)] hover:bg-teal-700 text-white py-2.5 rounded-xl font-semibold transition-colors text-sm shadow-sm"
-                >
-                  <Video size={16} />
-                  Video Call
-                </button>
-                <button 
-                  onClick={() => initiateCall(doctor, 'voice')}
-                  className="flex-1 flex items-center justify-center gap-2 bg-teal-50 hover:bg-teal-100 text-[var(--primary)] py-2.5 rounded-xl font-semibold transition-colors text-sm border border-teal-200"
-                >
-                  <Phone size={16} />
-                  Voice Call
-                </button>
-              </div>
-            </div>
-          ))}
+    <div className="p-4 md:p-8 space-y-8 pb-24">
+      
+      {/* Active/Pending Calls Section */}
+      {myCalls.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Clock className="text-teal-600" size={20} />
+            <h2 className="text-xl font-bold text-gray-800">{t.waitingRoom}</h2>
+          </div>
           
-          {doctors.length === 0 && (
-            <div className="col-span-full py-20 px-4 text-center border-2 border-dashed border-gray-200 rounded-3xl bg-gray-50/50">
-              <User size={48} className="mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-bold text-gray-700 mb-1">Doctors Offline</h3>
-              <p className="text-gray-500 font-medium">Koi doctor abhi available nahi hai. Kripya baad mein try karein.</p>
-            </div>
-          )}
+          <div className="grid gap-4">
+            {myCalls.filter(c => c.status !== 'completed').map((call) => (
+              <div key={call.id} className={`bg-white rounded-3xl border-2 p-6 shadow-sm transition-all ${
+                call.status === 'accepted' ? 'border-green-200 bg-green-50/10' : 'border-teal-100'
+              }`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
+                       call.status === 'accepted' ? 'bg-green-100 text-green-600' : 'bg-teal-100 text-teal-600'
+                    }`}>
+                      {call.mode === 'video' ? <Video size={28} /> : <Phone size={28} />}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-gray-800">Dr. {call.doctor_name}</h3>
+                      <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                        {call.mode} consultation
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col md:items-end gap-3">
+                    {call.status === 'pending' ? (
+                      <div className="flex items-center gap-2 bg-teal-50 text-teal-700 px-4 py-2 rounded-xl border border-teal-100">
+                        <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></div>
+                        <span className="text-sm font-black uppercase">{t.pending}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-green-200">
+                          <CheckCircle2 size={16} />
+                          <span className="text-sm font-black uppercase">{t.accepted}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {call.status === 'accepted' && (
+                  <div className="mt-6 p-4 bg-white border border-green-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 text-green-700 rounded-lg">
+                            <Info size={16} />
+                        </div>
+                        <p className="text-sm font-bold text-gray-700">{t.readyMsg}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-mono font-bold text-teal-700 tracking-wider">
+                            {call.meeting_code}
+                        </div>
+                        <button className="p-2 bg-teal-50 text-teal-600 rounded-xl hover:bg-teal-600 hover:text-white transition-all shadow-sm">
+                            <Copy size={18} />
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all font-bold shadow-lg shadow-teal-200">
+                            <span>Join</span>
+                            <ExternalLink size={16} />
+                        </button>
+                    </div>
+                  </div>
+                )}
+                
+                {call.status === 'pending' && (
+                    <p className="mt-4 text-xs font-bold text-teal-600/60 uppercase tracking-widest text-center md:text-left">
+                        {t.waitingMsg}
+                    </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Available Doctors Section */}
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+             <div className="p-3 bg-teal-600 text-white rounded-2xl shadow-lg shadow-teal-200">
+                <Video size={24} />
+             </div>
+             <div>
+                <h1 className="text-2xl font-black text-gray-800">{t.title}</h1>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t.subtitle}</p>
+             </div>
+          </div>
+
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-600 transition-colors" size={18} />
+            <input 
+                type="text"
+                placeholder={language === 'hi' ? 'डॉक्टर खोजें...' : 'Search doctor...'}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 pr-6 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500/40 outline-none w-full md:w-80 font-medium transition-all"
+            />
+          </div>
+        </div>
+
+        {filteredDoctors.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-dashed border-gray-200 p-16 text-center">
+            <User size={48} className="mx-auto mb-4 text-gray-300" />
+            <p className="font-bold text-gray-400">{t.noDoctors}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredDoctors.map((doc) => (
+              <div key={doc.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 hover:shadow-xl hover:shadow-teal-900/5 transition-all group border-b-4 border-b-transparent hover:border-b-teal-500">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center font-black text-xl border border-teal-100 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                    {doc.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-gray-800">Dr. {doc.name}</h3>
+                    <p className="text-xs font-bold text-teal-600 uppercase tracking-widest">{doc.specialization}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => handleRequest(doc.id, 'audio')}
+                    disabled={requesting}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 text-gray-700 font-bold hover:bg-teal-50 hover:text-teal-700 transition-all text-sm border border-gray-100"
+                  >
+                    <Phone size={16} />
+                    <span>{t.requestAudio}</span>
+                  </button>
+                  <button 
+                    onClick={() => handleRequest(doc.id, 'video')}
+                    disabled={requesting}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 transition-all text-sm shadow-lg shadow-teal-200 shadow-animate"
+                  >
+                    <Video size={16} />
+                    <span>{t.requestVideo}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

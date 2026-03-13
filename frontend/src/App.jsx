@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, AppContext } from './context/AppContext';
 import OfflineBanner from './components/OfflineBanner';
 import DashboardLayout from './components/DashboardLayout';
+import DoctorDashboardLayout from './components/DoctorDashboardLayout';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -18,13 +19,18 @@ const MedicineFinder = lazy(() => import('./pages/MedicineFinder'));
 const PatientProfile = lazy(() => import('./pages/PatientProfile'));
 const MyRecords = lazy(() => import('./pages/MyRecords'));
 const BookAppointment = lazy(() => import('./pages/BookAppointment'));
+const DoctorAppointments = lazy(() => import('./pages/DoctorAppointments'));
+const MedicineAdmin = lazy(() => import('./pages/MedicineAdmin'));
 
 function RequirePatient({ children }) {
-  const { patient, currentDoctor } = useContext(AppContext);
+  const { patient } = useContext(AppContext);
+  if (!patient) return <Navigate to="/login" replace />;
+  return children;
+}
 
-  if (currentDoctor) return children;
-  if (!patient) return <Navigate to="/register" replace />;
-
+function RequireDoctor({ children }) {
+  const { currentDoctor } = useContext(AppContext);
+  if (!currentDoctor) return <Navigate to="/doctor-login" replace />;
   return children;
 }
 
@@ -35,13 +41,17 @@ export default function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
-            {/* Public/Auth Routes without Dashboard Layout */}
+            {/* AUTH ROUTES */}
             <Route path="/register" element={<PatientRegister />} />
             <Route path="/login" element={<PatientLogin />} />
             <Route path="/doctor-login" element={<DoctorLogin />} />
-            <Route path="/dashboard" element={<DoctorDashboard />} />
 
-            {/* Patient Routes with Dashboard Layout */}
+            {/* DOCTOR ROUTES */}
+            <Route path="/dashboard" element={<RequireDoctor><DoctorDashboardLayout><DoctorDashboard /></DoctorDashboardLayout></RequireDoctor>} />
+            <Route path="/doctor-appointments" element={<RequireDoctor><DoctorDashboardLayout><DoctorAppointments /></DoctorDashboardLayout></RequireDoctor>} />
+            <Route path="/medicine-admin" element={<RequireDoctor><DoctorDashboardLayout><MedicineAdmin /></DoctorDashboardLayout></RequireDoctor>} />
+
+            {/* PATIENT ROUTES */}
             <Route path="/" element={<RequirePatient><DashboardLayout><Home /></DashboardLayout></RequirePatient>} />
             <Route path="/symptoms" element={<RequirePatient><DashboardLayout><SymptomChecker /></DashboardLayout></RequirePatient>} />
             <Route path="/result" element={<RequirePatient><DashboardLayout><TriageResult /></DashboardLayout></RequirePatient>} />

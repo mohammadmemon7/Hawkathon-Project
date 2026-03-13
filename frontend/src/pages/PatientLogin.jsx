@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Phone } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { getPatientByPhone } from '../services/api';
+import AuthLanguageToggle from '../components/AuthLanguageToggle';
 
 export default function PatientLogin() {
-  const { patient, setPatient, language } = useContext(AppContext);
+  const { patient, setPatient, language, toggleLanguage } = useContext(AppContext);
   const navigate = useNavigate();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,7 +55,10 @@ export default function PatientLogin() {
 
   return (
     <div className="min-h-[calc(100vh-56px)] bg-gray-50 flex flex-col justify-center px-4 py-12 md:px-8">
-      <div className="mx-auto w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+      <div className="mx-auto w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8 relative">
+        <div className="absolute top-6 right-6">
+          <AuthLanguageToggle language={language} toggleLanguage={toggleLanguage} />
+        </div>
         <div className="mb-6">
           <p className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
             {t.badge}

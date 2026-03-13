@@ -1,345 +1,283 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { getPatientHistory } from '../services/api';
-import { Filter, Download, User, Phone, MapPin, Activity, CalendarClock, Stethoscope, Droplets, FileText, CheckCircle2 } from 'lucide-react';
-import { formatTimeAgo } from '../utils/helpers';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { 
+  FileText, 
+  User, 
+  MapPin, 
+  Phone, 
+  Calendar, 
+  Activity, 
+  AlertCircle,
+  Stethoscope,
+  Filter,
+  ChevronRight,
+  RefreshCw,
+  Clock
+} from 'lucide-react';
 
-function normalizeSymptoms(symptoms) {
-  if (Array.isArray(symptoms)) return symptoms.filter(Boolean);
-  if (!symptoms) return [];
-
-  if (typeof symptoms === 'string') {
-    try {
-      const parsed = JSON.parse(symptoms);
-      if (Array.isArray(parsed)) return parsed.filter(Boolean);
-    } catch {
-      // Fall back to plain-text splitting
-    }
-    return symptoms.split(/,|\n/).map((item) => item.trim()).filter(Boolean);
-  }
-
-  return [String(symptoms)];
-}
-
-function normalizeRecord(record) {
-  return {
-    _id: record._id || record.id,
-    date: record.date || record.created_at || new Date().toISOString(),
-    symptoms: normalizeSymptoms(record.symptoms),
-    triageLevel: record.triageLevel || record.ai_triage_level || 'Home Remedy',
-    doctorNotes: record.doctorNotes || record.doctor_notes || '',
-    prescription: record.prescription || '',
-    status: record.status || 'completed', // Assume completed if historical
-  };
-}
+const RECORDS_CACHE_KEY = 'sehatsetu_records_cache';
 
 export default function MyRecords() {
   const { currentPatient, language } = useContext(AppContext);
-  const [history, setHistory] = useState([]);
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [triageFilter, setTriageFilter] = useState('All');
-  const [copiedId, setCopiedId] = useState(null);
-
-  // Fallbacks
-  const patientId = currentPatient?.id || 'PT-8932';
-  const patientName = currentPatient?.name || 'Ramesh Kumar';
-  const patientAge = currentPatient?.age || 45;
-  const patientVillage = currentPatient?.village || 'Nabha';
-  const patientPhone = currentPatient?.phone || '+91 987654321';
-  const patientGender = currentPatient?.gender || 'Purush';
-  const patientMedicalHistory = currentPatient?.medical_history || 'None provided';
-
-  useEffect(() => {
-    fetchHistory();
-  }, [patientId]);
-
-  const fetchHistory = async () => {
-    try {
-      setLoading(true);
-      const data = await getPatientHistory(patientId).catch(() => ([])); // Use empty array to simulate missing records if API fails or backend holds no records
-      
-      // Temporary stub block if explicitly required for preview:
-      // const data = [
-      //   {
-      //     _id: 'C-001',
-      //     date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      //     symptoms: ['Slight fever', 'Cough'],
-      //     triageLevel: 'Home Remedy',
-      //     doctorNotes: 'Take rest and drink warm water. No heavy medication needed.',
-      //     prescription: 'Paracetamol 500mg (SOS)',
-      //     status: 'completed'
-      //   },
-      //   {
-      //     _id: 'C-002',
-      //     date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      //     symptoms: ['Severe chest pain', 'Shortness of breath'],
-      //     triageLevel: 'Emergency',
-      //     doctorNotes: 'Referred to district hospital immediately.',
-      //     prescription: '',
-      //     status: 'pending'
-      //   }
-      // ];
-      
-      setHistory((data || []).map(normalizeRecord));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getTriageColor = (level) => {
-    const l = level.toUpperCase();
-    if(l === 'EMERGENCY') return 'bg-red-100 text-red-700 border-red-200 shadow-sm shadow-red-100';
-    if(l === 'CONSULT_SOON' || l === 'CONSULT SOON') return 'bg-amber-100 text-amber-700 border-amber-200 shadow-sm shadow-amber-100';
-    return 'bg-green-100 text-green-700 border-green-200 shadow-sm shadow-green-100';
-  };
-
-  const copyReportToClipboard = async (record) => {
-    const text = `SehatSetu AI - Consultation Report
---------------------------------------
-Patient: ${patientName} (ID: ${patientId}, Age: ${patientAge}, Gender: ${patientGender})
-Date: ${new Date(record.date).toLocaleString()}
-
-Triage Level: ${record.triageLevel.toUpperCase()}
-Symptoms: ${record.symptoms.join(', ')}
-
-Doctor Notes: 
-${record.doctorNotes || 'None provided.'}
-
-Prescription: 
-${record.prescription || 'None provided.'}
-
-Status: ${record.status.toUpperCase()}
---------------------------------------
-Disclaimer: This is a system generated report.`;
-    
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(record._id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy', err);
-    }
-  };
-
-  const filteredHistory = history.filter(h => {
-    if (triageFilter === 'All') return true;
-    return h.triageLevel.toUpperCase() === triageFilter.toUpperCase();
-  });
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState('All');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const t = {
-    myRecords: language === 'hi' ? 'मेरे रिकॉर्ड' : 'My Records',
-    patientProfile: language === 'hi' ? 'रोगी प्रोफ़ाइल' : 'Patient Profile',
+    title: language === 'hi' ? 'मेरे चिकित्सा रिकॉर्ड' : 'My Medical Records',
+    profileSummary: language === 'hi' ? 'प्रोफ़ाइल सारांश' : 'Profile Summary',
+    historyTitle: language === 'hi' ? 'परामर्श इतिहास' : 'Consultation History',
+    noRecords: language === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No records found',
     age: language === 'hi' ? 'उम्र' : 'Age',
     gender: language === 'hi' ? 'लिंग' : 'Gender',
-    village: language === 'hi' ? 'गाँव' : 'Village',
-    phone: language === 'hi' ? 'फ़ोन' : 'Phone',
-    medHistory: language === 'hi' ? 'मेडिकल हिस्ट्री' : 'Medical History',
-    summary: language === 'hi' ? 'सारांश' : 'Summary',
-    totalConsultations: language === 'hi' ? 'कुल परामर्श' : 'Total Consultations',
-    lastVisit: language === 'hi' ? 'अंतिम विजिट' : 'Last Visit',
-    filterBy: language === 'hi' ? 'फ़िल्टर करें' : 'Filter by',
-    all: language === 'hi' ? 'सभी' : 'All',
-    emergency: language === 'hi' ? 'आपातकालीन' : 'Emergency',
-    consultSoon: language === 'hi' ? 'जल्द परामर्श लें' : 'Consult Soon',
-    homeRemedy: language === 'hi' ? 'घरेलू उपचार' : 'Home Remedy',
-    symptoms: language === 'hi' ? 'लक्षण:' : 'Symptoms:',
-    notes: language === 'hi' ? 'डॉक्टर के नोट्स:' : 'Doctor Notes:',
-    prescription: language === 'hi' ? 'पर्चा:' : 'Prescription:',
-    downloadReport: language === 'hi' ? 'कॉपी करें' : 'Copy Text',
-    copiedReport: language === 'hi' ? 'कॉपी हो गया' : 'Copied!',
-    statusPrefix: language === 'hi' ? 'स्थिति:' : 'Status:',
+    village: language === 'hi' ? 'गांव' : 'Village',
+    medicalHistory: language === 'hi' ? 'पुरानी बीमारियां' : 'Medical History',
+    doctorNotes: language === 'hi' ? 'डॉक्टर के नोट्स' : 'Doctor Notes',
+    prescription: language === 'hi' ? 'दवा का पर्चा' : 'Prescription',
+    status: language === 'hi' ? 'स्थिति' : 'Status',
+    date: language === 'hi' ? 'तारीख' : 'Date',
+    symptoms: language === 'hi' ? 'लक्षण' : 'Symptoms',
+    offlineMode: language === 'hi' ? 'आप ऑफलाइन रिकॉर्ड देख रहे हैं' : 'Viewing offline records',
+    filters: {
+      All: language === 'hi' ? 'सभी' : 'All',
+      Emergency: language === 'hi' ? 'आपातकालीन' : 'Emergency',
+      'Consult Soon': language === 'hi' ? 'जल्द परामर्श' : 'Consult Soon',
+      'Home Remedy': language === 'hi' ? 'घरेलू उपचार' : 'Home Remedy'
+    }
   };
 
+  const loadData = async (silent = false) => {
+    if (!currentPatient) return;
+    if (!silent) setLoading(true);
+    else setIsRefreshing(true);
+
+    try {
+      const data = await getPatientHistory(currentPatient.id);
+      setRecords(data);
+      window.localStorage.setItem(`${RECORDS_CACHE_KEY}_${currentPatient.id}`, JSON.stringify(data));
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch records:', err);
+      // Attempt to load from cache
+      const cached = window.localStorage.getItem(`${RECORDS_CACHE_KEY}_${currentPatient.id}`);
+      if (cached) {
+        setRecords(JSON.parse(cached));
+        setError('offline');
+      } else {
+        setError('failed');
+      }
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [currentPatient?.id]);
+
+  const filteredRecords = useMemo(() => {
+    if (filter === 'All') return records;
+    
+    const filterMap = {
+      'Emergency': 3,
+      'Consult Soon': 2,
+      'Home Remedy': 1
+    };
+    
+    return records.filter(r => r.priority_score === filterMap[filter]);
+  }, [records, filter]);
+
+  const getTriageBadge = (score) => {
+    switch (score) {
+      case 3:
+        return <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200 uppercase tracking-wider">{t.filters.Emergency}</span>;
+      case 2:
+        return <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded-full border border-orange-200 uppercase tracking-wider">{t.filters['Consult Soon']}</span>;
+      case 1:
+        return <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200 uppercase tracking-wider">{t.filters['Home Remedy']}</span>;
+      default:
+        return <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full border border-gray-200 uppercase tracking-wider">Normal</span>;
+    }
+  };
+
+  if (loading) return <LoadingSpinner />;
+
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-5xl mx-auto pb-24">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">{t.myRecords}</h1>
-      </div>
+    <div className="p-4 md:p-8 space-y-8 pb-24">
+      {/* Offline Alert */}
+      {error === 'offline' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-800">
+          <AlertCircle size={20} className="text-amber-600" />
+          <p className="text-sm font-bold">{t.offlineMode}</p>
+        </div>
+      )}
 
-      {/* Patient Profile Card (Updated) */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 flex flex-col md:flex-row gap-8 items-start relative overflow-hidden group hover:shadow-md transition-shadow">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--primary)] opacity-[0.03] rounded-bl-[100px] pointer-events-none group-hover:scale-110 transition-transform origin-top-right"></div>
+      {/* Patient Profile Summary Card */}
+      <div className="bg-white rounded-3xl shadow-sm border border-emerald-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 p-6 text-white">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-black border border-white/30">
+              {currentPatient?.name?.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{currentPatient?.name}</h2>
+              <div className="flex items-center gap-2 text-teal-50 text-sm font-medium opacity-90 mt-1">
+                <p>PID: {currentPatient?.id}</p>
+                <span>•</span>
+                <div className="flex items-center gap-1">
+                  <Phone size={14} />
+                  {currentPatient?.phone}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         
-        <div className="flex items-center gap-6 flex-1">
-          <div className="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-br from-teal-500 to-[var(--primary)] rounded-full text-white flex items-center justify-center font-bold text-3xl shadow-lg border-4 border-white ring-4 ring-teal-50 shadow-teal-900/10">
-            {patientName.charAt(0)}
+        <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-gray-400">
+              <User size={16} />
+              <span className="text-xs font-bold uppercase tracking-widest">{t.age} & {t.gender}</span>
+            </div>
+            <p className="text-gray-800 font-bold">{currentPatient?.age} yr, {currentPatient?.gender}</p>
           </div>
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800 tracking-tight">{patientName}</h2>
-            <p className="text-gray-400 font-bold tracking-wide text-xs mt-1 uppercase">ID: {patientId}</p>
+          
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-gray-400">
+              <MapPin size={16} />
+              <span className="text-xs font-bold uppercase tracking-widest">{t.village}</span>
+            </div>
+            <p className="text-gray-800 font-bold">{currentPatient?.village}</p>
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-1 gap-3 w-full md:w-auto md:min-w-[250px] bg-gray-50/80 p-5 rounded-xl border border-gray-100">
-          <div className="flex items-center gap-3 text-sm font-semibold text-gray-700">
-             <User size={16} className="text-[var(--primary)]" />
-             <span>{t.age}: <span className="text-gray-900 font-bold">{patientAge} yrs</span></span>
-          </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-gray-700">
-             <User size={16} className="text-[var(--primary)]" />
-             <span>{t.gender}: <span className="text-gray-900 font-bold">{patientGender}</span></span>
-          </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-gray-700">
-             <MapPin size={16} className="text-[var(--primary)]" />
-             <span>{t.village}: <span className="text-gray-900 font-bold">{patientVillage}</span></span>
-          </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-gray-700">
-             <Phone size={16} className="text-[var(--primary)]" />
-             <span>{t.phone}: <span className="text-gray-900 font-bold">{patientPhone}</span></span>
+          <div className="md:col-span-2 space-y-1">
+            <div className="flex items-center gap-2 text-gray-400">
+              <Activity size={16} />
+              <span className="text-xs font-bold uppercase tracking-widest">{t.medicalHistory}</span>
+            </div>
+            <p className="text-gray-800 font-medium italic">
+              {currentPatient?.medical_history || (language === 'hi' ? 'कोई पिछला रिकॉर्ड नहीं' : 'No previous history recorded')}
+            </p>
           </div>
         </div>
       </div>
-      
-      {/* Medical History Snippet appended below Profile Overview */}
-      <div className="bg-amber-50 rounded-xl p-4 border border-amber-100/60 shadow-sm flex items-start gap-3">
-         <Activity className="text-amber-500 mt-0.5 shrink-0" size={18} />
-         <p className="text-sm font-medium text-amber-900"><span className="font-bold">{t.medHistory}:</span> {patientMedicalHistory}</p>
-      </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:-translate-y-0.5 transition-transform">
-           <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-[var(--primary)] shadow-inner">
-             <Stethoscope size={24} />
-           </div>
-           <div>
-             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">{t.totalConsultations}</p>
-             <p className="text-2xl font-black text-gray-800">{history.length}</p>
-           </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:-translate-y-0.5 transition-transform">
-           <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-inner">
-             <CalendarClock size={24} />
-           </div>
-           <div>
-             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">{t.lastVisit}</p>
-             <p className="text-lg font-bold text-gray-800 leading-tight">
-               {history.length > 0 ? formatTimeAgo(history[0].date) : '-'}
-             </p>
-           </div>
-        </div>
-      </div>
+      {/* History Section */}
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl">
+              <FileText size={24} />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800">{t.historyTitle}</h2>
+          </div>
 
-      {/* Triage Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-2 text-gray-800 font-bold text-lg">
-          <Filter size={20} className="text-[var(--primary)]" />
-          <span>{t.filterBy}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {['All', 'Emergency', 'Consult Soon', 'Home Remedy'].map((level) => (
+          {/* Filters */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+            {Object.keys(t.filters).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${
+                  filter === f 
+                  ? 'bg-teal-600 text-white border-teal-600 shadow-lg shadow-teal-600/20' 
+                  : 'bg-white text-gray-500 border-gray-100 hover:border-teal-200'
+                }`}
+              >
+                {t.filters[f]}
+              </button>
+            ))}
             <button 
-              key={level}
-              onClick={() => setTriageFilter(level)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                triageFilter === level 
-                  ? 'bg-[var(--primary)] text-white shadow-md shadow-teal-900/10' 
-                  : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
-              }`}
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
+              className={`p-2 rounded-xl border border-gray-100 text-gray-400 hover:text-teal-600 transition-colors ${isRefreshing ? 'animate-spin' : ''}`}
             >
-              {level === 'All' ? t.all : 
-               level === 'Emergency' ? t.emergency : 
-               level === 'Consult Soon' ? t.consultSoon : t.homeRemedy}
+              <RefreshCw size={18} />
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* History List */}
-      <div className="space-y-5">
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Activity className="animate-spin text-teal-600" size={32} />
           </div>
-        ) : filteredHistory.length === 0 ? (
-          <div className="text-center py-14 px-6 text-gray-500 font-medium bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-             <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-             <p className="text-lg font-bold text-gray-600">Aapka koi purana record nahi hai.</p>
+        </div>
+
+        {/* List of Consultations */}
+        {filteredRecords.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-dashed border-gray-200 p-12 text-center text-gray-400">
+            <FileText size={48} className="mx-auto mb-4 opacity-20" />
+            <p className="font-bold">{t.noRecords}</p>
           </div>
         ) : (
-          filteredHistory.map((record) => (
-            <div key={record._id} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
-               {/* Left accent color strip based on triage */}
-               <div className={`absolute left-0 top-0 bottom-0 w-1 ${record.triageLevel.toUpperCase() === 'EMERGENCY' ? 'bg-red-500' : (record.triageLevel.toUpperCase() === 'CONSULT SOON' || record.triageLevel.toUpperCase() === 'CONSULT_SOON') ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+          <div className="grid gap-6">
+            {filteredRecords.map((record) => (
+              <div key={record.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
+                <div className="flex flex-col lg:flex-row lg:items-center">
+                  {/* Left Column: Triage & Date */}
+                  <div className="p-6 lg:p-8 border-b lg:border-b-0 lg:border-r border-gray-50 bg-gray-50/30 lg:w-72 flex-shrink-0">
+                    <div className="mb-4">{getTriageBadge(record.priority_score)}</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <Calendar size={14} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{t.date}</span>
+                      </div>
+                      <p className="font-bold text-gray-800">
+                        {new Date(record.created_at).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </p>
+                      <div className="flex items-center gap-2 text-teal-600/60 font-medium text-xs">
+                        <Clock size={12} />
+                        <span>{new Date(record.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  </div>
 
-               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
-                 <div className="flex items-center gap-3 flex-wrap">
-                   <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 flex items-center gap-2 shadow-sm">
-                     <CalendarClock size={16} className="text-gray-600" />
-                     <span className="font-bold text-gray-800 text-sm">{formatTimeAgo(record.date)}</span>
-                   </div>
-                   
-                   {/* Triage Badge */}
-                   <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${getTriageColor(record.triageLevel)}`}>
-                     {record.triageLevel.toUpperCase() === 'EMERGENCY' ? t.emergency : (record.triageLevel.toUpperCase() === 'CONSULT_SOON' || record.triageLevel.toUpperCase() === 'CONSULT SOON') ? t.consultSoon : t.homeRemedy}
-                   </span>
-                   
-                   {/* Status Badge */}
-                   <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${record.status === 'pending' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                     {record.status === 'pending' ? 'Pending' : 'Completed'}
-                   </span>
+                  {/* Right Column: Details */}
+                  <div className="p-6 lg:p-8 flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-emerald-600/70 font-black text-[10px] uppercase tracking-widest">
+                          <Stethoscope size={12} />
+                          {t.symptoms}
+                        </div>
+                        <p className="text-gray-800 font-bold leading-relaxed">{record.symptoms}</p>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-gray-400 font-black text-[10px] uppercase tracking-widest">
+                          <Clock size={12} />
+                          {t.status}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                           <div className={`w-2 h-2 rounded-full ${record.status === 'completed' ? 'bg-green-500' : 'bg-amber-500'}`}></div>
+                           <span className="text-sm font-bold text-gray-700 capitalize">{record.status}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                 </div>
-                 
-                 <button 
-                   onClick={() => copyReportToClipboard(record)}
-                   className="hidden md:flex items-center gap-2 text-sm font-bold text-teal-700 bg-teal-50 px-4 py-2 rounded-xl hover:bg-teal-100 hover:-translate-y-0.5 transition-all outline-none focus:ring-2 focus:ring-teal-500/50"
-                 >
-                   {copiedId === record._id ? (
-                     <><CheckCircle2 size={18} className="text-green-600" /> <span className="text-green-700">{t.copiedReport}</span></>
-                   ) : (
-                     <><Download size={18} /> {t.downloadReport}</>
-                   )}
-                 </button>
-               </div>
-
-               <div className="space-y-4">
-                 <div>
-                   <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                     <Activity size={16} /> {t.symptoms}
-                   </h4>
-                   <div className="flex flex-wrap gap-2">
-                     {record.symptoms.map((sym, i) => (
-                       <span key={i} className="bg-white border border-gray-200 shadow-sm text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold">
-                         {sym}
-                       </span>
-                     ))}
-                   </div>
-                 </div>
-
-                 {record.doctorNotes && (
-                   <div className="bg-amber-50/50 p-4 md:p-5 rounded-xl border border-amber-100">
-                     <h4 className="text-sm font-bold text-amber-800 mb-1.5 flex items-center gap-2">
-                       <FileText size={18} /> {t.notes}
-                     </h4>
-                     <p className="text-amber-900/80 text-sm font-medium leading-relaxed">{record.doctorNotes}</p>
-                   </div>
-                 )}
-
-                 {record.prescription && (
-                   <div className="bg-blue-50/50 p-4 md:p-5 rounded-xl border border-blue-100">
-                     <h4 className="text-sm font-bold text-blue-800 mb-1.5 flex items-center gap-2">
-                       <Droplets size={18} /> {t.prescription}
-                     </h4>
-                     <p className="text-blue-900/80 text-sm font-medium leading-relaxed">{record.prescription}</p>
-                   </div>
-                 )}
-               </div>
-
-               <button 
-                 onClick={() => copyReportToClipboard(record)}
-                 className="mt-6 w-full md:hidden flex items-center justify-center gap-2 text-sm font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-4 py-3 rounded-xl transition-colors shadow-sm"
-               >
-                 {copiedId === record._id ? (
-                   <><CheckCircle2 size={18} className="text-green-600" /> <span className="text-green-700">{t.copiedReport}</span></>
-                 ) : (
-                   <><Download size={18} /> {t.downloadReport}</>
-                 )}
-               </button>
-            </div>
-          ))
+                    <div className="space-y-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
+                      <div className="space-y-1">
+                        <span className="text-teal-600/70 font-black text-[10px] uppercase tracking-widest block">{t.doctorNotes}</span>
+                        <p className="text-sm text-gray-600 font-medium leading-relaxed italic">
+                          {record.doctor_notes || (language === 'hi' ? 'परामर्श लंबित है' : 'Consultation pending...')}
+                        </p>
+                      </div>
+                      
+                      {record.prescription && (
+                        <div className="space-y-1 pt-2 border-t border-gray-100">
+                          <span className="text-teal-600/70 font-black text-[10px] uppercase tracking-widest block">{t.prescription}</span>
+                          <p className="text-sm font-bold text-gray-800">{record.prescription}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

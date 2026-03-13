@@ -36,3 +36,31 @@ exports.getAll = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.update = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { available, stock_count, price } = req.body;
+    
+    db.prepare(`
+      UPDATE medicines 
+      SET available = ?, stock_count = ?, price = ?, last_updated = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `).run(available, stock_count, price, id);
+    
+    const updated = db.prepare('SELECT * FROM medicines WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getLastUpdated = async (req, res, next) => {
+  try {
+    const latest = db.prepare('SELECT MAX(last_updated) as last_updated FROM medicines').get();
+    res.json(latest);
+  } catch (err) {
+    next(err);
+  }
+};
+

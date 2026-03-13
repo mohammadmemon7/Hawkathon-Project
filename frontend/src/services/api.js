@@ -130,6 +130,33 @@ export async function searchMedicines(name) {
   }
 }
 
+export async function getAllMedicines(page = 1, limit = 100) {
+  try {
+    const res = await withRetry(() => api.get('/medicines/all', { params: { page, limit } }));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getMedicineLastUpdated() {
+  try {
+    const res = await withRetry(() => api.get('/medicines/last-updated'));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function updateMedicine(id, data) {
+  try {
+    const res = await withRetry(() => api.patch(`/medicines/${id}`, data));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
 export async function createAppointment(data) {
   try {
     const res = await withRetry(() => api.post('/appointments', data));
@@ -198,6 +225,51 @@ export async function requestCall(data) {
 export async function cancelCall(id) {
   try {
     const res = await withRetry(() => api.patch(`/calls/${id}/cancel`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getPatientCalls(patientId) {
+  try {
+    const res = await withRetry(() => api.get(`/calls/patient/${patientId}`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function getPendingCalls() {
+  try {
+    const res = await withRetry(() => api.get('/calls/pending'));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function acceptCall(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/calls/${id}/accept`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function completeCall(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/calls/${id}/complete`));
+    return res.data;
+  } catch (err) {
+    throw err.response?.data || err;
+  }
+}
+
+export async function toggleDoctorAvailability(id) {
+  try {
+    const res = await withRetry(() => api.patch(`/doctors/${id}/toggle`));
     return res.data;
   } catch (err) {
     throw err.response?.data || err;

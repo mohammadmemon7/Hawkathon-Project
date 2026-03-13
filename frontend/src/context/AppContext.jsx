@@ -3,52 +3,79 @@ import React, { createContext, useEffect, useState } from 'react';
 export const AppContext = createContext();
 
 const PATIENT_STORAGE_KEY = 'sehatsetu_patient';
+const DOCTOR_STORAGE_KEY = 'sehatsetu_doctor';
+const LANG_STORAGE_KEY = 'sehatsetu_lang';
 
-function getStoredPatient() {
+function getStoredValue(key) {
   if (typeof window === 'undefined') return null;
-
   try {
-    const rawPatient = window.localStorage.getItem(PATIENT_STORAGE_KEY) || window.localStorage.getItem('patient');
-    return rawPatient ? JSON.parse(rawPatient) : null;
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
 export function AppProvider({ children }) {
-  const [patient, setPatientState] = useState(getStoredPatient);
-  const [currentDoctor, setCurrentDoctor] = useState(null);
-  const [language, setLanguage] = useState('hi');
+  const [patient, setPatientState] = useState(() => getStoredValue(PATIENT_STORAGE_KEY) || getStoredValue('patient'));
+  const [currentDoctor, setCurrentDoctorState] = useState(() => getStoredValue(DOCTOR_STORAGE_KEY));
+  const [language, setLanguage] = useState(() => window.localStorage.getItem(LANG_STORAGE_KEY) || 'hi');
 
   const setPatient = (nextPatient) => {
     setPatientState(nextPatient);
   };
 
-  const logout = () => {
+  const setCurrentDoctor = (nextDoctor) => {
+    setCurrentDoctorState(nextDoctor);
+  };
+
+  const logoutPatient = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(PATIENT_STORAGE_KEY);
       window.localStorage.removeItem('patient');
     }
     setPatientState(null);
-    setCurrentDoctor(null);
+  };
+
+  const logoutDoctor = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(DOCTOR_STORAGE_KEY);
+    }
+    setCurrentDoctorState(null);
+  };
+
+  // Deprecated global logout for backward compatibility
+  const logout = () => {
+    logoutPatient();
+    logoutDoctor();
   };
 
   useEffect(() => {
-    document.documentElement.lang = language;
+    if (document.documentElement) {
+      document.documentElement.lang = language;
+    }
+    window.localStorage.setItem(LANG_STORAGE_KEY, language);
   }, [language]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     if (patient) {
       window.localStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(patient));
-      // Also keep 'patient' for compatibility if needed
       window.localStorage.setItem('patient', JSON.stringify(patient));
     } else {
       window.localStorage.removeItem(PATIENT_STORAGE_KEY);
       window.localStorage.removeItem('patient');
     }
   }, [patient]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentDoctor) {
+      window.localStorage.setItem(DOCTOR_STORAGE_KEY, JSON.stringify(currentDoctor));
+    } else {
+      window.localStorage.removeItem(DOCTOR_STORAGE_KEY);
+    }
+  }, [currentDoctor]);
 
   const toggleLanguage = () => {
     setLanguage((prev) => (prev === 'hi' ? 'en' : 'hi'));
@@ -61,9 +88,11 @@ export function AppProvider({ children }) {
         setPatient,
         currentPatient: patient,
         setCurrentPatient: setPatient,
-        logout,
         currentDoctor,
         setCurrentDoctor,
+        logoutPatient,
+        logoutDoctor,
+        logout,
         language,
         toggleLanguage,
       }}

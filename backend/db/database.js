@@ -82,6 +82,7 @@ db.exec(`
     doctor_id INTEGER NOT NULL,
     appointment_date TEXT NOT NULL,
     appointment_time TEXT NOT NULL,
+    reason TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled', 'completed', 'cancelled')),
     notes TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -97,6 +98,19 @@ db.exec(`
     message TEXT NOT NULL,
     is_read INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS call_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER,
+    doctor_id INTEGER,
+    mode TEXT CHECK(mode IN ('audio', 'video')),
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'completed', 'cancelled')),
+    meeting_code TEXT,
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(id),
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id)
   );
 `);
 

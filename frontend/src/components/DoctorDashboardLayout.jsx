@@ -1,21 +1,18 @@
 import React, { useState } from 'react';
-import Sidebar from './Sidebar';
+import DoctorSidebar from './DoctorSidebar';
 import TopHeader from './TopHeader';
 
-export default function DashboardLayout({ children }) {
+export default function DoctorDashboardLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-gray-50/50 overflow-hidden text-gray-800">
-      {/* Sidebar - Always Present (Responsive toggled internally) */}
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      <DoctorSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <TopHeader onMenuClick={() => setIsSidebarOpen(true)} />
         
-        <main className="flex-1 overflow-y-auto bg-gray-50/20 scroll-smooth">
-          {/* Internal padding for content */}
+        <main className="flex-1 overflow-y-auto bg-gray-50/20">
           <div className="max-w-[1600px] mx-auto min-h-full">
             {children}
           </div>

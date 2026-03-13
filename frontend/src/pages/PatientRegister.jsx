@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, User, Phone, MapPin, Clipboard } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { registerPatient } from '../services/api';
+import AuthLanguageToggle from '../components/AuthLanguageToggle';
 
 const VILLAGES = [
   'Nabha', 'Sirhind', 'Fatehgarh Sahib', 'Dera Bassi',
@@ -10,7 +11,7 @@ const VILLAGES = [
 ];
 
 export default function PatientRegister() {
-  const { setPatient, language } = useContext(AppContext);
+  const { setPatient, language, toggleLanguage } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -69,7 +70,10 @@ export default function PatientRegister() {
 
   return (
     <div className="min-h-[calc(100vh-56px)] bg-gray-50 px-4 py-8 md:px-8">
-      <div className="mx-auto max-w-2xl bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
+      <div className="mx-auto max-w-2xl bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8 relative">
+        <div className="absolute top-8 right-8">
+          <AuthLanguageToggle language={language} toggleLanguage={toggleLanguage} />
+        </div>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.title}</h1>
           <p className="text-gray-500">{t.subtitle}</p>
