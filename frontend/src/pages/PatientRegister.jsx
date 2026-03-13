@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { registerPatient } from '../services/api';
@@ -10,7 +10,7 @@ const VILLAGES = [
 ];
 
 export default function PatientRegister() {
-  const { setCurrentPatient } = useContext(AppContext);
+  const { setPatient } = useContext(AppContext);
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -45,7 +45,7 @@ export default function PatientRegister() {
         setToast(`Welcome back ${patient.name}!`);
       }
 
-      setCurrentPatient(patient);
+      setPatient(patient);
       setTimeout(() => navigate('/symptoms'), 600);
     } catch {
       setToast('Kuch gadbad ho gayi. Dobara try karein.');
@@ -59,6 +59,13 @@ export default function PatientRegister() {
       <h1 className="text-xl font-bold mb-5" style={{ color: 'var(--primary)' }}>
         Apni Jaankari Bharein
       </h1>
+
+      <div className="mb-5 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-gray-600 shadow-sm">
+        <p className="font-medium text-gray-800">Pehle se register hain?</p>
+        <Link to="/login" className="mt-2 inline-flex font-semibold text-teal-700 hover:text-teal-800">
+          Phone number se login karein →
+        </Link>
+      </div>
 
       {toast && (
         <div className="mb-4 p-3 rounded-lg bg-teal-50 text-teal-800 text-sm font-medium">

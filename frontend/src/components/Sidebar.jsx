@@ -1,11 +1,12 @@
 import React, { useContext } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Activity, Video, ClipboardList, Pill, CalendarDays, LogOut, X } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 
 export default function Sidebar({ isOpen, setIsOpen }) {
   const location = useLocation();
-  const { language } = useContext(AppContext);
+  const navigate = useNavigate();
+  const { language, logout } = useContext(AppContext);
 
   const navItems = [
     { name: language === 'hi' ? 'होम' : 'Home', path: '/', icon: <Home size={20} /> },
@@ -72,7 +73,9 @@ export default function Sidebar({ isOpen, setIsOpen }) {
           <button 
             className="flex items-center gap-3 px-4 py-2.5 w-full rounded-xl text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors font-medium group"
             onClick={() => {
+              logout();
               setIsOpen(false);
+              navigate('/login');
             }}
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
