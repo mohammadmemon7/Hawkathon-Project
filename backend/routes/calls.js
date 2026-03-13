@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const ctrl = require('../controllers/callController');
+const callController = require('../controllers/callController');
 
-router.post('/request', ctrl.requestCall);
-router.get('/pending', ctrl.getPendingCalls);
-router.patch('/:id/accept', ctrl.acceptCall);
-router.patch('/:id/complete', ctrl.completeCall);
+// POST /api/calls/request
+router.post('/request', callController.requestCall);
+
+// PATCH /api/calls/:id/cancel
+router.patch('/:id/cancel', callController.cancelCall);
 
 module.exports = router;

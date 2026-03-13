@@ -1,9 +1,8 @@
-import { lazy, Suspense, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AppProvider } from './context/AppContext';
+import { lazy, Suspense, useState, useContext } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AppProvider, AppContext } from './context/AppContext';
 import OfflineBanner from './components/OfflineBanner';
-import Sidebar from './components/Sidebar';
-import TopHeader from './components/TopHeader';
+import DashboardLayout from './components/DashboardLayout';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -18,40 +17,41 @@ const MedicineFinder = lazy(() => import('./pages/MedicineFinder'));
 const PatientProfile = lazy(() => import('./pages/PatientProfile'));
 const MyRecords = lazy(() => import('./pages/MyRecords'));
 const BookAppointment = lazy(() => import('./pages/BookAppointment'));
+const PatientLogin = lazy(() => import('./pages/PatientLogin'));
+
+function ProtectedPatientRoute({ children }) {
+  const { currentPatient } = useContext(AppContext);
+  if (!currentPatient) {
+    return <Navigate to="/register" replace />;
+  }
+  return children;
+}
 
 export default function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   return (
     <AppProvider>
       <OfflineBanner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <div className="flex h-screen bg-gray-50 overflow-hidden text-[var(--text)]">
-          <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-          
-          <div className="flex-1 flex flex-col h-screen overflow-hidden">
-            <TopHeader onMenuClick={() => setIsSidebarOpen(true)} />
-            
-            <main className="flex-1 overflow-y-auto bg-gray-50/30">
-              <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/register" element={<PatientRegister />} />
-                <Route path="/symptoms" element={<SymptomChecker />} />
-                <Route path="/result" element={<TriageResult />} />
-                <Route path="/doctor-login" element={<DoctorLogin />} />
-                <Route path="/dashboard" element={<DoctorDashboard />} />
-                <Route path="/talk" element={<TalkToDoctor />} />
-                <Route path="/book-appointment" element={<BookAppointment />} />
-                <Route path="/consultation/:id" element={<ConsultationDetail />} />
-                <Route path="/medicines" element={<MedicineFinder />} />
-                <Route path="/profile/:id" element={<PatientProfile />} />
-                <Route path="/records" element={<MyRecords />} />
-              </Routes>
-              </Suspense>
-            </main>
-          </div>
-        </div>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* Public/Auth Routes without Dashboard Layout */}
+            <Route path="/register" element={<PatientRegister />} />
+            <Route path="/login" element={<PatientLogin />} />
+            <Route path="/doctor-login" element={<DoctorLogin />} />
+            <Route path="/dashboard" element={<DoctorDashboard />} />
+
+            {/* Patient Routes with Dashboard Layout */}
+            <Route path="/" element={<DashboardLayout><Home /></DashboardLayout>} />
+            <Route path="/symptoms" element={<ProtectedPatientRoute><DashboardLayout><SymptomChecker /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/result" element={<ProtectedPatientRoute><DashboardLayout><TriageResult /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/talk" element={<ProtectedPatientRoute><DashboardLayout><TalkToDoctor /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/book-appointment" element={<ProtectedPatientRoute><DashboardLayout><BookAppointment /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/consultation/:id" element={<ProtectedPatientRoute><DashboardLayout><ConsultationDetail /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/medicines" element={<ProtectedPatientRoute><DashboardLayout><MedicineFinder /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/profile/:id" element={<ProtectedPatientRoute><DashboardLayout><PatientProfile /></DashboardLayout></ProtectedPatientRoute>} />
+            <Route path="/records" element={<ProtectedPatientRoute><DashboardLayout><MyRecords /></DashboardLayout></ProtectedPatientRoute>} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AppProvider>
   );

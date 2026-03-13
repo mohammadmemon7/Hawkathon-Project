@@ -46,6 +46,7 @@ export default function PatientRegister() {
       }
 
       setCurrentPatient(patient);
+      localStorage.setItem('patient', JSON.stringify(patient));
       setTimeout(() => navigate('/symptoms'), 600);
     } catch {
       setToast('Kuch gadbad ho gayi. Dobara try karein.');

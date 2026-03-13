@@ -1,26 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { WifiOff, X } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 
 export default function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [visible, setVisible] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setTimeout(() => setVisible(false), 2000); // Hide after showing "back online" briefly
-    };
-    
-    const handleOffline = () => {
-      setIsOnline(false);
-      setVisible(true);
-    };
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // Initial check
-    if (!navigator.onLine) setVisible(true);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -28,25 +17,16 @@ export default function OfflineBanner() {
     };
   }, []);
 
-  if (!visible) return null;
+  if (!isOffline) return null;
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-[100] transform transition-all duration-300 ${isOnline ? 'bg-green-500' : 'bg-amber-500'} text-white shadow-md flex items-center justify-between px-4 py-3 md:px-6`}>
-      <div className="flex items-center gap-3">
-        <WifiOff size={20} className={isOnline ? 'hidden' : 'block'} />
-        <span className="font-bold text-sm md:text-base tracking-wide">
-          {isOnline 
-            ? 'Connected - Back Online' 
-            : 'Aap offline hain — purana data dikha rahe hain'}
-        </span>
+    <div className="fixed bottom-0 left-0 right-0 z-[100] bg-amber-400 text-amber-950 px-4 py-3 shadow-lg shadow-amber-900/20 border-t border-amber-500 animate-[slideUp_0.3s_ease-out]">
+      <div className="max-w-5xl mx-auto flex items-center justify-center gap-3">
+        <WifiOff size={20} className="animate-pulse" />
+        <p className="font-bold text-sm tracking-wide">
+          📡 Aap offline hain — purana data dikha rahe hain
+        </p>
       </div>
-      
-      <button 
-        onClick={() => setVisible(false)}
-        className="p-1.5 hover:bg-black/10 rounded-lg transition-colors"
-      >
-        <X size={18} />
-      </button>
     </div>
   );
 }

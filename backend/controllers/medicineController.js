@@ -16,6 +16,14 @@ exports.search = async (req, res, next) => {
 
 exports.getAll = async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minute caching for medicine list
+
+    // Backward compatibility: If no page parameter, return raw array.
+    if (!req.query.page) {
+       const medicines = db.prepare('SELECT * FROM medicines').all();
+       return res.json(medicines);
+    }
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
